@@ -1,0 +1,27 @@
+/* Bontgenoten Festival site.css v1.0.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
+
+/* De vloeiende root-fontgrootte van de starter staat nog uit: die staat nu in het component global-styles. Gaat over bij de nieuwe tokens (fase C van docs/plan.md). */
+
+/* Scherpere letters op macOS */
+body {
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* Rich text: geen marge boven het eerste en onder het laatste element */
+.w-richtext > :first-child { margin-top: 0; }
+.w-richtext > :last-child { margin-bottom: 0; }
+
+/* Toegankelijkheid: zichtbare focus voor toetsenbordgebruikers. Eén regel voor alle elementen; Webflow kan dit alleen per class */
+:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* [words-slide-up] (site.js): elk woord in een masker */
+.word { display: inline-block; white-space: normal; }
+.mask { overflow: hidden; display: inline-block; line-height: 1.6; padding-bottom: 0; margin-bottom: -0.5em; }
+
+/* Smooth scroll (Lenis, gestart door site.js op data-bgf-lenis): de stijl die Lenis nodig heeft; zonder Lenis doet dit niets */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth iframe { pointer-events: none; }
+.lenis.lenis-stopped { overflow: clip; }
