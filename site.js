@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.3.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.4.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -215,11 +215,13 @@
       .to('.loader_logo-icon', { yPercent: -110, ease: 'expo.out', duration: 0.6 }, 0.2);
   }, homeLoader ? ['CustomEase'] : []);
 
-  /* .marquee-slide: eindeloze rij; scrollen versnelt hem en draait de richting om. Bij reduced motion staat hij stil. */
-  if (document.querySelector('.marquee-slide') && !reduce.matches) withGsap(function (gsap) {
+  /* Marquee: eindeloze rij; scrollen versnelt hem en draait de richting om. Bij reduced motion staat hij stil.
+     [data-bgf-marquee-item] (Section - Marquee, 2027) en .marquee-slide (Zongenoten, 2025). */
+  var marqueeItems = '[data-bgf-marquee-item], .marquee-slide';
+  if (document.querySelector(marqueeItems) && !reduce.matches) withGsap(function (gsap) {
     var speed = { value: 1 };
     var tl = gsap.timeline({ repeat: -1, onReverseComplete: function () { tl.progress(1); } });
-    tl.fromTo('.marquee-slide', { xPercent: 0 }, { xPercent: -100, duration: 50, ease: 'none' });
+    tl.fromTo(marqueeItems, { xPercent: 0 }, { xPercent: -100, duration: 50, ease: 'none' });
     window.Observer.create({
       target: window,
       type: 'wheel,scroll,touch',
