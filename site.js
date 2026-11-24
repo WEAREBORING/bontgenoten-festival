@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.5.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.5.1: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -107,16 +107,24 @@
     window.addEventListener('pageshow', function (e) { if (e.persisted) window.location.reload(); });
   });
 
-  /* .button_wrapper: de lijnen (.button_background-line) vullen de knop bij hover. Alleen desktop met muis. */
-  if (document.querySelector('.button_background-line')) withGsap(function (gsap) {
+  /* .button_wrapper: de lijnen (.button_background-line) vullen de knop bij hover. Alleen desktop met muis.
+     Zelfde hover voor andere knoppen met lijnen [data-bgf-fill-line] (twee niveaus diep, zoals de FAQ-tabs); niet op de actieve tab. */
+  if (document.querySelector('.button_background-line, [data-bgf-fill-line]')) withGsap(function (gsap) {
     var desktop = window.matchMedia('(hover: hover) and (min-width: 992px)');
-    each('.button_wrapper', function (button) {
-      var lines = button.querySelectorAll('.button_background-line');
+    var hosts = [].slice.call(document.querySelectorAll('.button_wrapper'));
+    each('[data-bgf-fill-line]', function (line) {
+      var host = line.parentNode.parentNode;
+      if (hosts.indexOf(host) < 0) hosts.push(host);
+    });
+    hosts.forEach(function (button) {
+      var lines = button.querySelectorAll('.button_background-line, [data-bgf-fill-line]');
       if (!lines.length) return;
       function fill(height) {
         gsap.to(lines, { height: height, duration: 0.4, ease: 'expo.out', stagger: { amount: 0.15, from: 'random' }, overwrite: true });
       }
-      button.addEventListener('mouseenter', function () { if (desktop.matches && !reduce.matches) fill('101%'); });
+      button.addEventListener('mouseenter', function () {
+        if (desktop.matches && !reduce.matches && button.getAttribute('aria-selected') !== 'true') fill('101%');
+      });
       button.addEventListener('mouseleave', function () { fill('0%'); });
     });
   });
@@ -259,7 +267,7 @@
   }
 
   /* data-bgf-tabs (Section - FAQ): knoppen [data-bgf-tab="naam"] tonen het paneel [data-bgf-tab-panel="naam"]; ARIA-tabs met
-     pijltjestoetsen, Home en End. Begint op ?faq=<naam> (tickets, vervoer, info, safe, zoals de oude FAQ), anders op de eerste tab.
+     pijltjestoetsen, Home en End; de lijst animeert uit en in bij wisselen. Begint op ?faq=<naam> (tickets, vervoer, info, safe, zoals de oude FAQ), anders op de eerste tab.
      Zonder JS staan alle panelen onder elkaar. */
   each('[data-bgf-tabs]', function (root, n) {
     var tabs = [].slice.call(root.querySelectorAll('[data-bgf-tab]'));
@@ -279,18 +287,40 @@
       panel.setAttribute('aria-labelledby', tab.id);
       tab.setAttribute('aria-controls', panel.id);
     });
+    // Wisselen: de rijen van de oude lijst gaan omhoog weg, die van de nieuwe komen van onder in beeld (GSAP; zonder GSAP of
+    // bij reduced motion direct). Een nieuwe klik midden in de wissel maakt de vorige eerst af.
+    var current = null, switching = null;
+    var rows = function (panel) {
+      var r = panel.querySelectorAll('[role="listitem"]');
+      return r.length ? r : [panel];
+    };
     var select = function (tab, focus) {
       tabs.forEach(function (t) {
         var on = t === tab;
         t.setAttribute('aria-selected', on);
         t.tabIndex = on ? 0 : -1;
-        var p = panelFor(t);
-        if (p) p.hidden = !on;
       });
       if (focus) tab.focus();
+      if (switching) switching.progress(1).kill();
+      var prev = current, next = panelFor(tab);
+      current = next;
+      var gsap = window.gsap;
+      if (!gsap || reduce.matches || !prev || !next || prev === next) {
+        panels.forEach(function (p) { p.hidden = p !== next; });
+        return;
+      }
+      switching = gsap.timeline({ onComplete: function () { switching = null; } })
+        .to(rows(prev), { opacity: 0, y: '-0.75rem', duration: 0.2, ease: 'power2.in', stagger: 0.02 })
+        .add(function () {
+          prev.hidden = true;
+          gsap.set(rows(prev), { clearProps: 'opacity,transform' });
+          next.hidden = false;
+        })
+        .fromTo(rows(next), { opacity: 0, y: '1rem' },
+          { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', stagger: 0.04, clearProps: 'opacity,transform' });
     };
     tabs.forEach(function (tab, i) {
-      tab.addEventListener('click', function () { select(tab); });
+      tab.addEventListener('click', function () { if (tab.getAttribute('aria-selected') !== 'true') select(tab); });
       tab.addEventListener('keydown', function (e) {
         var to = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
         if (to === undefined) return;
