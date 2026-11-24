@@ -37,3 +37,7 @@ html.bgf-cursor-on, html.bgf-cursor-on * { cursor: none !important; }
 .nav_toggle[aria-expanded="true"] .nav_toggle-line:first-child { transform: translateY(0.25rem) rotate(45deg); }
 .nav_toggle[aria-expanded="true"] .nav_toggle-line:last-child { transform: translateY(-0.25rem) rotate(-45deg); }
 html.bgf-nav-open { overflow: hidden; }
+/* Tickets-knop in de nav: Creme boven de hero en footer (data-bgf-nav-dark), anders zwart (zoals de Black-variant) */
+[data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_wrapper { background-color: var(--_theme---action--primary); }
+[data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_text { color: var(--_theme---action--contrast); text-shadow: 0 1em 0 var(--_theme---action--primary); }
+[data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_background-line { background-color: var(--_theme---action--contrast); }

@@ -363,6 +363,19 @@
       dd.addEventListener('focusout', function (e) { if (e.relatedTarget && !dd.contains(e.relatedTarget)) setDrop(dd, false); });
     });
     if (navToggle && menu) navToggle.addEventListener('click', function () { setMenu(navToggle.getAttribute('aria-expanded') !== 'true'); });
+    // Over een donkere sectie (data-bgf-nav-dark: hero, footer) krijgt de nav data-bgf-nav-on-dark; site.css maakt de
+    // Tickets-knop anders zwart, zodat hij ook op creme zichtbaar blijft
+    var darks = [].slice.call(document.querySelectorAll('[data-bgf-nav-dark]'));
+    var ticking = false;
+    function checkDark() {
+      ticking = false;
+      var y = 38; // midden van de knoppenbalk (1rem boven + 2.75rem hoog)
+      nav.toggleAttribute('data-bgf-nav-on-dark', darks.some(function (s) { var r = s.getBoundingClientRect(); return r.top <= y && r.bottom >= y; }));
+    }
+    function queueDark() { if (!ticking) { ticking = true; requestAnimationFrame(checkDark); } }
+    window.addEventListener('scroll', queueDark, { passive: true });
+    window.addEventListener('resize', queueDark);
+    checkDark();
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
       var open = drops.filter(isOpen)[0];
