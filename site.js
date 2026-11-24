@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.2.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.3.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -253,6 +253,53 @@
     gsap.to('.hero-home_logo-zongenoten', Object.assign({ y: -15, duration: 3 }, float));
     gsap.to('.hero-home_logo-zongenoten', Object.assign({ x: 8, duration: 4.5 }, float));
     gsap.to('.hero-home_logo-zongenoten', Object.assign({ rotation: 2, duration: 5 }, float));
+  });
+
+  /* data-bgf-cursor (op Global - Nav): jubileumcursor, twee gekruiste creme ovalen met mix-blend-mode difference, zodat het
+     overlappende deel de pagina laat zien. Alleen met muis (hover + fijne pointer) en zonder reduced motion. Standen (Figma 642:2106):
+     standaard 26 px, hover 40 px (links, knoppen, [data-bgf-cursor-hover]), ingedrukt 20 px, slepen 80 x 40 ([data-bgf-cursor-drag]).
+     De css staat in site.css (.bgf-cursor). */
+  var fine = window.matchMedia('(hover: hover) and (pointer: fine)');
+  if (document.querySelector('[data-bgf-cursor]') && fine.matches && !reduce.matches) withGsap(function (gsap) {
+    // [breedte, hoogte] van het liggende ovaal; het staande ovaal is gespiegeld, behalve bij slepen
+    var sizes = { base: [26, 14, 14, 26], hover: [40, 18, 18, 40], press: [20, 10, 10, 20], drag: [80, 24, 24, 40] };
+    var ovals = ['is-horizontal', 'is-vertical'].map(function (mod) {
+      var o = document.createElement('span');
+      o.className = 'bgf-cursor ' + mod;
+      o.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(o);
+      gsap.set(o, { xPercent: -50, yPercent: -50, opacity: 0 });
+      return o;
+    });
+    document.documentElement.classList.add('bgf-cursor-on');
+    var moveX = ovals.map(function (o) { return gsap.quickTo(o, 'x', { duration: 0.15, ease: 'power3.out' }); });
+    var moveY = ovals.map(function (o) { return gsap.quickTo(o, 'y', { duration: 0.15, ease: 'power3.out' }); });
+    var current = '', hovering = false, pressed = false, dragging = false;
+    function setState() {
+      var next = dragging ? 'drag' : pressed ? 'press' : hovering ? 'hover' : 'base';
+      if (next === current) return;
+      current = next;
+      var d = sizes[next];
+      gsap.to(ovals[0], { width: d[0], height: d[1], duration: 0.3, ease: 'power3.out', overwrite: 'auto' });
+      gsap.to(ovals[1], { width: d[2], height: d[3], duration: 0.3, ease: 'power3.out', overwrite: 'auto' });
+    }
+    setState();
+    var hoverSel = 'a, button, [role="button"], input[type="submit"], label, select, [data-bgf-cursor-hover]';
+    document.addEventListener('mousemove', function (e) {
+      moveX.forEach(function (f) { f(e.clientX); });
+      moveY.forEach(function (f) { f(e.clientY); });
+      gsap.to(ovals, { opacity: 1, duration: 0.2, overwrite: 'auto' });
+      var t = e.target instanceof Element ? e.target : null;
+      hovering = !!(t && t.closest(hoverSel));
+      setState();
+    });
+    document.addEventListener('mousedown', function (e) {
+      pressed = true;
+      dragging = !!(e.target instanceof Element && e.target.closest('[data-bgf-cursor-drag]'));
+      setState();
+    });
+    document.addEventListener('mouseup', function () { pressed = false; dragging = false; setState(); });
+    document.documentElement.addEventListener('mouseleave', function () { gsap.to(ovals, { opacity: 0, duration: 0.2, overwrite: 'auto' }); });
   });
 
   /* data-bgf-nav (Global - Nav): dropdowns en het mobiele menu, zonder Navbar of Dropdown van Webflow.
