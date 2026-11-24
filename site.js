@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.6.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.6.1: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -174,7 +174,7 @@
   }, ['ScrollTrigger']);
 
   /* data-bgf-gradient (Section - Hero): ODB's jubileumverloop live met WebGL2 (gradient.js, alleen hier geladen). Waarde = preset
-     (standaard bgf-interactive: stroken volgen de muis, lens rond de cursor). Alleen met muis, zonder reduced motion en met WebGL2;
+     (standaard bgf-hero: stilstaande 10, stroken volgen de muis, lens rond de cursor). Alleen met muis, zonder reduced motion en met WebGL2;
      anders blijft de afbeelding (de still) staan. De canvas komt over de afbeelding en faded in na het eerste beeld; buiten beeld
      staat hij stil. el.bgfGradient = de engine, voor data-bgf-hero. */
   function hasWebgl2() { try { return !!document.createElement('canvas').getContext('webgl2'); } catch (e) { return false; } }
@@ -187,7 +187,7 @@
         var still = el.querySelector('img');
         el.insertBefore(canvas, still ? still.nextSibling : el.firstChild);
         canvas.addEventListener('bgf:rendered', function () { canvas.setAttribute('data-bgf-ready', ''); }, { once: true });
-        var g = window.BGFGradient.create(canvas, { preset: el.getAttribute('data-bgf-gradient') || 'bgf-interactive' });
+        var g = window.BGFGradient.create(canvas, { preset: el.getAttribute('data-bgf-gradient') || 'bgf-hero' });
         el.bgfGradient = g;
         el.addEventListener('pointermove', function (e) {
           var r = canvas.getBoundingClientRect();

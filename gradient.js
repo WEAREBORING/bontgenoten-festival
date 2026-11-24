@@ -524,6 +524,11 @@ const PRESETS = [
   { id:'bgf-interactive', name:'BGF interactief', desc:'Rustige loop, stroken volgen de muis, lens rond de cursor', patch:{
     loopSec:20, hold:.55, animDisp:false, animGrad:false, dispMin:.034, dispMax:.525, zoomMax:1.6, blurMax:.075, gMomentAmt:.32, gTurns:1, ripAmt:.06, maskInfl:-.21,
     pointerStrips:true, pointerShift:.6, lens:true, lensRadius:.5, lensSoftness:.74, pointerSmooth:.98 } },
+  // BORING: hero of the site (2026-11-24): as bgf-interactive, but the 10 stays put (no zoom, focus or rotation moments, no blur pulse);
+  // colour flow, strips, ripple and the mouse interaction keep moving
+  { id:'bgf-hero', name:'BGF hero', desc:'Als BGF interactief, met een stilstaande 10', patch:{
+    loopSec:20, hold:.55, animDisp:false, animGrad:false, animZoom:false, animBlur:false, dispMin:.034, dispMax:.525, zoomMax:1.6, blurMax:.075, gMomentAmt:.32, gTurns:1, ripAmt:.06, maskInfl:-.21,
+    pointerStrips:true, pointerShift:.6, lens:true, lensRadius:.5, lensSoftness:.74, pointerSmooth:.98 } },
 ];
 Object.assign(DEFAULTS, deep(PRESET7));
 // ---------- bron: "10" in Suisse BP Int'l ----------
