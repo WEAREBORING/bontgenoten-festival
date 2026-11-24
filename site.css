@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.css v1.4.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
+/* Bontgenoten Festival site.css v1.5.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
 
 /* Vloeiende root-fontgrootte: 1rem = 16px op het ontwerpformaat (1440 x 900) en daaronder. Groter alleen als het scherm
    zowel breder als hoger is, tot 18px; zo past een sectie ook op een breed maar laag scherm.
@@ -41,3 +41,20 @@ html.bgf-nav-open { overflow: hidden; }
 [data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_wrapper { background-color: var(--_theme---action--primary); }
 [data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_text { color: var(--_theme---action--contrast); text-shadow: 0 1em 0 var(--_theme---action--primary); }
 [data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_background-line { background-color: var(--_theme---action--contrast); }
+
+/* data-bgf-tabs (Section - FAQ): de actieve tab is gevuld (zwart met creme tekst); hover alleen met muis */
+.faq_tab[aria-selected="true"] { background-color: var(--_theme---action--primary); color: var(--_theme---action--contrast); }
+@media (hover: hover) and (pointer: fine) { .faq_tab[aria-selected="false"]:hover { background-color: var(--_theme---surface--band); } }
+
+/* data-bgf-accordion (Item - FAQ): klapt in met grid-rows zodra site.js klaar is (data-bgf-ready; animatie pas na de eerste paint, data-bgf-animate); dicht = onzichtbaar voor
+   toetsenbord en schermlezer. Het plusje wordt een min doordat de verticale streep wegschaalt. */
+[data-bgf-ready] [data-bgf-accordion-panel] { grid-template-rows: 0fr; }
+[data-bgf-animate] [data-bgf-accordion-panel] { transition: grid-template-rows 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+[data-bgf-ready] [aria-expanded="true"] + [data-bgf-accordion-panel] { grid-template-rows: 1fr; }
+[data-bgf-ready] [data-bgf-accordion-panel][aria-hidden="true"] > * { visibility: hidden; }
+[data-bgf-animate] [data-bgf-accordion-panel][aria-hidden="true"] > * { transition: visibility 0s 0.4s; }
+[data-bgf-accordion-icon-v] { transform-box: fill-box; transform-origin: center; transition: transform 0.3s ease; }
+[aria-expanded="true"] [data-bgf-accordion-icon-v] { transform: scaleY(0); }
+@media (prefers-reduced-motion: reduce) { [data-bgf-accordion-panel], [data-bgf-accordion-panel] > *, [data-bgf-accordion-icon-v] { transition: none !important; } }
+/* Antwoorden uit het CMS: links in de tekstkleur, onderstreept (Webflow kan geen nested selector via de API) */
+.faq_answer-text a { color: inherit; text-decoration: underline; }

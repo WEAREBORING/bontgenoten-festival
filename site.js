@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.4.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.5.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -257,6 +257,76 @@
       document.querySelector('[faq-button-tickets]');
     if (start) activateFaq(start);
   }
+
+  /* data-bgf-tabs (Section - FAQ): knoppen [data-bgf-tab="naam"] tonen het paneel [data-bgf-tab-panel="naam"]; ARIA-tabs met
+     pijltjestoetsen, Home en End. Begint op ?faq=<naam> (tickets, vervoer, info, safe, zoals de oude FAQ), anders op de eerste tab.
+     Zonder JS staan alle panelen onder elkaar. */
+  each('[data-bgf-tabs]', function (root, n) {
+    var tabs = [].slice.call(root.querySelectorAll('[data-bgf-tab]'));
+    var panels = [].slice.call(root.querySelectorAll('[data-bgf-tab-panel]'));
+    if (!tabs.length) return;
+    tabs[0].parentNode.setAttribute('role', 'tablist');
+    var panelFor = function (tab) {
+      return panels.filter(function (p) { return p.getAttribute('data-bgf-tab-panel') === tab.getAttribute('data-bgf-tab'); })[0];
+    };
+    tabs.forEach(function (tab, i) {
+      var panel = panelFor(tab);
+      tab.id = 'bgf-tab-' + n + '-' + i;
+      tab.setAttribute('role', 'tab');
+      if (!panel) return;
+      panel.id = 'bgf-tabpanel-' + n + '-' + i;
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('aria-labelledby', tab.id);
+      tab.setAttribute('aria-controls', panel.id);
+    });
+    var select = function (tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute('aria-selected', on);
+        t.tabIndex = on ? 0 : -1;
+        var p = panelFor(t);
+        if (p) p.hidden = !on;
+      });
+      if (focus) tab.focus();
+    };
+    tabs.forEach(function (tab, i) {
+      tab.addEventListener('click', function () { select(tab); });
+      tab.addEventListener('keydown', function (e) {
+        var to = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+        if (to === undefined) return;
+        e.preventDefault();
+        select(tabs[(to + tabs.length) % tabs.length], true);
+      });
+    });
+    var requested = new URLSearchParams(window.location.search).get('faq');
+    select(tabs.filter(function (t) { return t.getAttribute('data-bgf-tab') === requested; })[0] || tabs[0]);
+  });
+
+  /* data-bgf-accordion (de lijst) met data-bgf-accordion-item > data-bgf-accordion-trigger (button) + data-bgf-accordion-panel:
+     één vraag tegelijk open, de eerste staat open. Het in- en uitklappen is css (site.css); zonder JS staat alles open. */
+  each('[data-bgf-accordion]', function (list, n) {
+    var items = [].slice.call(list.querySelectorAll('[data-bgf-accordion-item]'));
+    var parts = items.map(function (item, i) {
+      var trigger = item.querySelector('[data-bgf-accordion-trigger]');
+      var panel = item.querySelector('[data-bgf-accordion-panel]');
+      if (!trigger || !panel) return null;
+      panel.id = 'bgf-accordion-' + n + '-' + i;
+      trigger.setAttribute('aria-controls', panel.id);
+      return { trigger: trigger, panel: panel };
+    }).filter(Boolean);
+    var open = function (part) {
+      parts.forEach(function (p) {
+        var on = p === part && p.trigger.getAttribute('aria-expanded') !== 'true';
+        p.trigger.setAttribute('aria-expanded', on);
+        p.panel.setAttribute('aria-hidden', !on);
+      });
+    };
+    parts.forEach(function (p) { p.trigger.addEventListener('click', function () { open(p); }); });
+    open(parts[0]);
+    list.setAttribute('data-bgf-ready', '');
+    // pas na de eerste paint animeren, anders klappen alle antwoorden zichtbaar dicht bij het laden
+    requestAnimationFrame(function () { requestAnimationFrame(function () { list.setAttribute('data-bgf-animate', ''); }); });
+  });
 
   /* [close-menu]: een klik sluit het menu (klikt op .menu_button, die de interactie van het menu start) */
   document.addEventListener('click', function (e) {
