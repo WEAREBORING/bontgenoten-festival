@@ -148,6 +148,20 @@
     });
   }, ['ScrollTrigger']);
 
+  /* data-bgf-parallax (Section - Gallery): kinderen met data-bgf-speed bewegen anders mee met scrollen.
+     1 = gewoon mee, kleiner = trager (achter de titel), groter = sneller. Alleen vanaf 992px en zonder reduced motion. */
+  if (document.querySelector('[data-bgf-parallax]') && !reduce.matches) withGsap(function (gsap) {
+    gsap.matchMedia().add('(min-width: 992px)', function () {
+      each('[data-bgf-parallax]', function (wrap) {
+        wrap.querySelectorAll('[data-bgf-speed]').forEach(function (el) {
+          var shift = ((parseFloat(el.getAttribute('data-bgf-speed')) || 1) - 1) * 250;
+          gsap.fromTo(el, { y: shift }, { y: -shift, ease: 'none',
+            scrollTrigger: { trigger: wrap, start: 'top bottom', end: 'bottom top', scrub: true } });
+        });
+      });
+    });
+  }, ['ScrollTrigger']);
+
   /* Footer-CTA (.cta_wrapper): [cta-top|right|bottom|left] schuiven naar binnen. Beginstand staat in de head van de pagina. */
   var ctaParts = '[cta-top], [cta-right], [cta-bottom], [cta-left]';
   if (document.querySelector('.cta_wrapper')) withGsap(function (gsap) {
