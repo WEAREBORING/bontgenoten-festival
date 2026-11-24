@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.7.1: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.7.2: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -198,18 +198,22 @@
   function hasWebgl2() { try { return !!document.createElement('canvas').getContext('webgl2'); } catch (e) { return false; } }
   var liveGradient = gradientSrc && finePointer.matches && !reduce.matches &&
     document.querySelector('[data-bgf-gradient], [data-bgf-gradient-text]') && hasWebgl2();
-  // engine op een canvas in el: muis stuurt de stroken (en de lens), buiten beeld staat hij stil
-  function startGradient(el, canvas, preset, onReady) {
+  // engine op een canvas in el: muis stuurt de stroken (en de lens), tenzij opts.pointer === false; buiten beeld staat hij stil
+  function startGradient(el, canvas, preset, onReady, opts) {
+    opts = opts || {};
     canvas.className = 'bgf-gradient';
     canvas.setAttribute('aria-hidden', 'true');
     canvas.addEventListener('bgf:rendered', function () { canvas.setAttribute('data-bgf-ready', ''); if (onReady) onReady(); }, { once: true });
-    var g = window.BGFGradient.create(canvas, { preset: preset });
+    var g = window.BGFGradient.create(canvas, { preset: preset, maxDpr: opts.maxDpr || 2 });
     el.bgfGradient = g;
-    el.addEventListener('pointermove', function (e) {
-      var r = canvas.getBoundingClientRect();
-      g.setPointer((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
-    });
-    el.addEventListener('pointerleave', function () { g.setPointer(null); });
+    if (opts.pointer === false) g.setState({ pointerStrips: false, lens: false });
+    else {
+      el.addEventListener('pointermove', function (e) {
+        var r = canvas.getBoundingClientRect();
+        g.setPointer((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+      });
+      el.addEventListener('pointerleave', function () { g.setPointer(null); });
+    }
     new IntersectionObserver(function (entries) { if (entries[0].isIntersecting) g.play(); else g.pause(); }).observe(el);
     return g;
   }
@@ -218,13 +222,17 @@
       var canvas = document.createElement('canvas');
       var still = el.querySelector('img');
       el.insertBefore(canvas, still ? still.nextSibling : el.firstChild);
-      startGradient(el, canvas, el.getAttribute('data-bgf-gradient') || 'bgf-hero');
+      // smalle band (marquee): de canvas krijgt de verhouding van een scherm (16:9) en de band toont daar een strook uit, zodat het
+      // verloop eruitziet als in de hero in plaats van alle kleuren in een paar centimeter; resolutie 1x is daar genoeg
+      var band = el.clientWidth > el.clientHeight * 3;
+      if (band) canvas.setAttribute('data-bgf-crop', '');
+      startGradient(el, canvas, el.getAttribute('data-bgf-gradient') || 'bgf-hero', null, { maxDpr: band ? 1 : 2 });
     });
 
     /* data-bgf-gradient-text (Section - Gallery, titelregels): de letters gevuld met het live verloop. De canvas ligt in de regel en
        wordt geknipt met een SVG-clipPath met dezelfde tekst, op de basislijn en de beginpositie van de echte tekst (gemeten met een
        markering); de echte tekst blijft staan voor schermlezers en selectie en wordt doorzichtig zodra de canvas tekent.
-       Strookbreedte zoals in de hero: zeven stroken per schermbreedte. */
+       Strookbreedte zoals in de hero: zeven stroken per schermbreedte. Reageert niet op de muis. */
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('style', 'position:absolute;width:0;height:0;overflow:hidden');
@@ -244,7 +252,7 @@
       var canvas = document.createElement('canvas');
       canvas.style.clipPath = 'url(#' + clip.id + ')';
       el.appendChild(canvas);
-      var g = startGradient(el, canvas, el.getAttribute('data-bgf-gradient-text') || 'bgf-glass', function () { el.setAttribute('data-bgf-live', ''); });
+      var g = startGradient(el, canvas, el.getAttribute('data-bgf-gradient-text') || 'bgf-glass', function () { el.setAttribute('data-bgf-live', ''); }, { pointer: false });
       var fit = function () {
         var cs = getComputedStyle(el), c = canvas.getBoundingClientRect(), m = marker.getBoundingClientRect();
         t.setAttribute('x', m.left - c.left);
