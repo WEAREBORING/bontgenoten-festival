@@ -32,3 +32,8 @@ html.lenis, html.lenis body { height: auto; }
 /* Cursor (data-bgf-cursor, site.js maakt de twee ovalen en zet .bgf-cursor-on op html; alleen met muis) */
 .bgf-cursor { position: fixed; left: 0; top: 0; z-index: 10000; border-radius: 50%; background-color: #f4eae1; mix-blend-mode: difference; pointer-events: none; }
 html.bgf-cursor-on, html.bgf-cursor-on * { cursor: none !important; }
+
+/* Global - Nav (data-bgf-nav): de twee streepjes worden een kruis zolang het mobiele menu open is; de pagina scrolt dan niet mee */
+.nav_toggle[aria-expanded="true"] .nav_toggle-line:first-child { transform: translateY(0.25rem) rotate(45deg); }
+.nav_toggle[aria-expanded="true"] .nav_toggle-line:last-child { transform: translateY(-0.25rem) rotate(-45deg); }
+html.bgf-nav-open { overflow: hidden; }

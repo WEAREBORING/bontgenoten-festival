@@ -330,7 +330,10 @@
       if (!navToggle || !menu) return;
       navToggle.setAttribute('aria-expanded', open);
       menu.style.display = open ? 'flex' : '';
+      document.documentElement.classList.toggle('bgf-nav-open', open);
     }
+    // Een link in het mobiele menu sluit het menu (ankers op dezelfde pagina laden niet opnieuw)
+    if (menu) menu.addEventListener('click', function (e) { if (e.target.closest('a')) setMenu(false); });
     drops.forEach(function (dd) {
       var toggle = toggleOf(dd), timer;
       if (!toggle) return;
