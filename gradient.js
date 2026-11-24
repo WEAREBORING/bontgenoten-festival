@@ -529,6 +529,10 @@ const PRESETS = [
   { id:'bgf-hero', name:'BGF hero', desc:'Als BGF interactief, met een stilstaande 10', patch:{
     loopSec:20, hold:.55, animDisp:false, animGrad:false, animZoom:false, animBlur:false, dispMin:.034, dispMax:.525, zoomMax:1.6, blurMax:.075, gMomentAmt:.32, gTurns:1, ripAmt:.06, maskInfl:-.21,
     pointerStrips:true, pointerShift:.6, lens:true, lensRadius:.5, lensSoftness:.74, pointerSmooth:.98 } },
+  // BORING: the gradient and glass without the 10, for fills (gallery title letters, marquee band); strips follow the mouse, no lens
+  { id:'bgf-glass', name:'BGF glas', desc:'Verloop en glasstroken zonder 10', patch:{
+    loopSec:20, hold:.55, animDisp:false, animGrad:false, animZoom:false, animBlur:false, dispMin:.034, dispMax:.525, zoomMax:1.6, blurMax:.075, gMomentAmt:.32, gTurns:1, ripAmt:.06, maskInfl:-.21,
+    showShape:false, pointerStrips:true, pointerShift:.6, lens:false, pointerSmooth:.98 } },
 ];
 Object.assign(DEFAULTS, deep(PRESET7));
 // ---------- bron: "10" in Suisse BP Int'l ----------

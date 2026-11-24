@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.6.1: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.7.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -149,6 +149,24 @@
     });
   }, ['ScrollTrigger', 'SplitText']);
 
+  /* data-bgf-words (koppen van 2027): woorden schuiven per stuk omhoog in beeld, zoals [words-slide-up], maar het masker houdt
+     de regelhoogte van de kop (.bgf-word-mask in site.css). [words-slide-up] blijft voor Zongenoten (.mask met line-height 1.6). */
+  if (document.querySelector('[data-bgf-words]') && !reduce.matches) withGsap(function (gsap) {
+    document.fonts.ready.then(function () {
+      each('[data-bgf-words]', function (el) {
+        var words = window.SplitText.create(el, { type: 'words', wordsClass: 'bgf-word', tag: 'span' }).words;
+        words.forEach(function (word) {
+          var mask = document.createElement('span');
+          mask.className = 'bgf-word-mask';
+          word.parentNode.insertBefore(mask, word);
+          mask.appendChild(word);
+        });
+        var tl = gsap.timeline({ paused: true }).from(words, { yPercent: 110, opacity: 0, duration: 1, ease: 'expo.out', stagger: { each: 0.04 } });
+        window.ScrollTrigger.create({ trigger: el, start: 'top 80%', onEnter: function () { tl.play(); } });
+      });
+    });
+  }, ['ScrollTrigger', 'SplitText']);
+
   /* [fade-up]: element komt omhoog in beeld als het 80% van het scherm bereikt */
   if (document.querySelector('[fade-up]') && !reduce.matches) withGsap(function (gsap) {
     each('[fade-up]', function (el) {
@@ -178,30 +196,74 @@
      anders blijft de afbeelding (de still) staan. De canvas komt over de afbeelding en faded in na het eerste beeld; buiten beeld
      staat hij stil. el.bgfGradient = de engine, voor data-bgf-hero. */
   function hasWebgl2() { try { return !!document.createElement('canvas').getContext('webgl2'); } catch (e) { return false; } }
-  if (gradientSrc && finePointer.matches && !reduce.matches && document.querySelector('[data-bgf-gradient]') && hasWebgl2()) {
-    load(gradientSrc).then(function () {
-      each('[data-bgf-gradient]', function (el) {
-        var canvas = document.createElement('canvas');
-        canvas.className = 'bgf-gradient';
-        canvas.setAttribute('aria-hidden', 'true');
-        var still = el.querySelector('img');
-        el.insertBefore(canvas, still ? still.nextSibling : el.firstChild);
-        canvas.addEventListener('bgf:rendered', function () { canvas.setAttribute('data-bgf-ready', ''); }, { once: true });
-        var g = window.BGFGradient.create(canvas, { preset: el.getAttribute('data-bgf-gradient') || 'bgf-hero' });
-        el.bgfGradient = g;
-        el.addEventListener('pointermove', function (e) {
-          var r = canvas.getBoundingClientRect();
-          g.setPointer((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
-        });
-        el.addEventListener('pointerleave', function () { g.setPointer(null); });
-        new IntersectionObserver(function (entries) { if (entries[0].isIntersecting) g.play(); else g.pause(); }).observe(el);
-      });
-    }).catch(function (e) { console.error('site.js:', e); });
+  var liveGradient = gradientSrc && finePointer.matches && !reduce.matches &&
+    document.querySelector('[data-bgf-gradient], [data-bgf-gradient-text]') && hasWebgl2();
+  // engine op een canvas in el: muis stuurt de stroken (en de lens), buiten beeld staat hij stil
+  function startGradient(el, canvas, preset, onReady) {
+    canvas.className = 'bgf-gradient';
+    canvas.setAttribute('aria-hidden', 'true');
+    canvas.addEventListener('bgf:rendered', function () { canvas.setAttribute('data-bgf-ready', ''); if (onReady) onReady(); }, { once: true });
+    var g = window.BGFGradient.create(canvas, { preset: preset });
+    el.bgfGradient = g;
+    el.addEventListener('pointermove', function (e) {
+      var r = canvas.getBoundingClientRect();
+      g.setPointer((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+    });
+    el.addEventListener('pointerleave', function () { g.setPointer(null); });
+    new IntersectionObserver(function (entries) { if (entries[0].isIntersecting) g.play(); else g.pause(); }).observe(el);
+    return g;
   }
+  if (liveGradient) load(gradientSrc).then(function () {
+    each('[data-bgf-gradient]', function (el) {
+      var canvas = document.createElement('canvas');
+      var still = el.querySelector('img');
+      el.insertBefore(canvas, still ? still.nextSibling : el.firstChild);
+      startGradient(el, canvas, el.getAttribute('data-bgf-gradient') || 'bgf-hero');
+    });
+
+    /* data-bgf-gradient-text (Section - Gallery, titelregels): de letters gevuld met het live verloop. De canvas ligt in de regel en
+       wordt geknipt met een SVG-clipPath met dezelfde tekst, op de basislijn en de beginpositie van de echte tekst (gemeten met een
+       markering); de echte tekst blijft staan voor schermlezers en selectie en wordt doorzichtig zodra de canvas tekent.
+       Strookbreedte zoals in de hero: zeven stroken per schermbreedte. */
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('style', 'position:absolute;width:0;height:0;overflow:hidden');
+    document.body.appendChild(svg);
+    each('[data-bgf-gradient-text]', function (el, n) {
+      var text = el.textContent.replace(/\s+/g, ' ').trim();
+      var marker = document.createElement('span');
+      marker.setAttribute('data-bgf-baseline', '');
+      el.insertBefore(marker, el.firstChild);
+      var clip = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+      clip.id = 'bgf-text-clip-' + n;
+      clip.setAttribute('clipPathUnits', 'userSpaceOnUse');
+      var t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.textContent = text;
+      clip.appendChild(t);
+      svg.appendChild(clip);
+      var canvas = document.createElement('canvas');
+      canvas.style.clipPath = 'url(#' + clip.id + ')';
+      el.appendChild(canvas);
+      var g = startGradient(el, canvas, el.getAttribute('data-bgf-gradient-text') || 'bgf-glass', function () { el.setAttribute('data-bgf-live', ''); });
+      var fit = function () {
+        var cs = getComputedStyle(el), c = canvas.getBoundingClientRect(), m = marker.getBoundingClientRect();
+        t.setAttribute('x', m.left - c.left);
+        t.setAttribute('y', m.top - c.top);
+        t.setAttribute('font-family', cs.fontFamily);
+        t.setAttribute('font-size', cs.fontSize);
+        t.setAttribute('font-weight', cs.fontWeight);
+        t.setAttribute('letter-spacing', cs.letterSpacing === 'normal' ? '0' : cs.letterSpacing);
+        var strips = Math.max(2, Math.round(7 * c.width / window.innerWidth));
+        g.setState({ stripsMin: strips, stripsMax: strips + 1 });
+      };
+      document.fonts.ready.then(fit);
+      new ResizeObserver(fit).observe(el);
+    });
+  }).catch(function (e) { console.error('site.js:', e); });
 
   /* data-bgf-hero (Section - Hero): [data-bgf-hero-item] komen om de beurt omhoog in beeld na de paginaovergang, [data-bgf-hero-fade] faden in. Vanaf 992px met
      muis blijft de hero daarna één schermhoogte staan (pin) terwijl de volgende sectie eroverheen schuift: [data-bgf-hero-out] gaat
-     omhoog weg en de 10 in het glas lost op in het verloop (bredere, krommere stroken, meer blur). Reduced motion: niets. */
+     omhoog weg en de 10 in het glas lost op in het verloop (meer blur; de stroken blijven staan). Reduced motion: niets. */
   if (document.querySelector('[data-bgf-hero]') && !reduce.matches) withGsap(function (gsap) {
     var lerp = function (a, b, t) { return a + (b - a) * t; };
     each('[data-bgf-hero]', function (hero) {
@@ -217,8 +279,7 @@
           p = Math.round(p * 50) / 50;
           if (!g || p === last) return;
           last = p;
-          g.setState({ stripsMin: Math.round(lerp(7, 3, p)), stripsMax: Math.round(lerp(8, 4, p)), curve: lerp(0.36, 0.9, p),
-            blurMin: lerp(0.006, 0.09, p), blurMax: lerp(0.075, 0.12, p) });
+          g.setState({ blurMin: lerp(0.006, 0.09, p), blurMax: lerp(0.075, 0.12, p) });
         };
         var tl = gsap.timeline({ scrollTrigger: { trigger: hero, start: 'top top', end: '+=100%', pin: true, pinSpacing: false, scrub: true,
           onUpdate: function (self) { dissolve(self.progress); } } });
