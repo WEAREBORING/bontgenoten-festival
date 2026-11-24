@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.7.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.7.1: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -587,12 +587,13 @@
     if (navToggle && menu) navToggle.addEventListener('click', function () { setMenu(navToggle.getAttribute('aria-expanded') !== 'true'); });
     // Over een donkere sectie (data-bgf-nav-dark: hero, footer) krijgt de nav data-bgf-nav-on-dark; site.css maakt de
     // Tickets-knop anders zwart, zodat hij ook op creme zichtbaar blijft
-    var darks = [].slice.call(document.querySelectorAll('[data-bgf-nav-dark]'));
+    // Gekeken wordt naar wat er echt onder de knop zichtbaar is (de hero kan vastgepind onder de galerij liggen)
     var ticking = false;
     function checkDark() {
       ticking = false;
-      var y = 38; // midden van de knoppenbalk (1rem boven + 2.75rem hoog)
-      nav.toggleAttribute('data-bgf-nav-on-dark', darks.some(function (s) { var r = s.getBoundingClientRect(); return r.top <= y && r.bottom >= y; }));
+      var x = window.innerWidth - 80, y = 38; // bij de Tickets-knop: midden van de knoppenbalk (1rem boven + 2.75rem hoog)
+      var under = document.elementsFromPoint(x, y).filter(function (el) { return !el.closest('[data-bgf-nav], .transition'); })[0];
+      nav.toggleAttribute('data-bgf-nav-on-dark', !!(under && under.closest('[data-bgf-nav-dark]')));
     }
     function queueDark() { if (!ticking) { ticking = true; requestAnimationFrame(checkDark); } }
     window.addEventListener('scroll', queueDark, { passive: true });
