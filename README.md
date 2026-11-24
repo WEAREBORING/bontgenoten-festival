@@ -6,6 +6,7 @@ De eigen CSS en JavaScript van de Webflow-site van Bontgenoten Festival. Webflow
 |---|---|---|
 | `site.css` | vloeiende root-fontgrootte, rich text, focus, en verder alleen wat Webflow niet zelf kan | site-head, als `<link>` |
 | `site.js` | attribuutmodules (`data-bgf-*`) | site-footer, als `<script>` |
+| `gradient.js` | het jubileumverloop van ODB (WebGL2-engine, met toestemming van ODB), alleen geladen door `site.js` waar `data-bgf-gradient` staat | niet: site.js laadt `gradient.min.js` van dezelfde tag |
 | `test/index.html` | lokale testpagina voor alle modules | niet |
 
 De repository is publiek: zet er nooit sleutels, tokens of interne documentatie in.
@@ -30,7 +31,7 @@ Site settings > Custom code. Staat er andere code in dezelfde blokken (bijvoorbe
 1. Pas `site.js` of `site.css` aan en hoog het versienummer in de eerste commentaarregel op.
 2. Test lokaal met `test/index.html`.
 3. Commit, tag en push: `git tag vX.Y.Z && git push && git push --tags`. Eén tag per release, ook als maar één bestand wijzigt.
-4. Controleer dat jsDelivr de nieuwe versie geeft: `curl -s https://cdn.jsdelivr.net/gh/WEAREBORING/bontgenoten-festival@vX.Y.Z/site.js | head -1`. Vraag daarna ook `site.min.js` en `site.min.css` op tot ze 200 geven: jsDelivr maakt de `.min`-bestanden pas bij het eerste verzoek, en dat eerste verzoek kan in de browser mislukken (dan draait site.js niet). Gaf de push een fout (GitHub gaf soms 500, soms alleen op de tag), controleer dan `main` en de tag met `git ls-remote origin`.
+4. Controleer dat jsDelivr de nieuwe versie geeft: `curl -s https://cdn.jsdelivr.net/gh/WEAREBORING/bontgenoten-festival@vX.Y.Z/site.js | head -1`. Vraag daarna ook `site.min.js`, `site.min.css` en `gradient.min.js` op tot ze 200 geven: jsDelivr maakt de `.min`-bestanden pas bij het eerste verzoek, en dat eerste verzoek kan in de browser mislukken (dan draait site.js niet). Gaf de push een fout (GitHub gaf soms 500, soms alleen op de tag), controleer dan `main` en de tag met `git ls-remote origin`.
 5. Lees het head- en footerblok in Webflow (`get_site_freeform_code`), vervang alleen de tag in de link en schrijf het blok terug (`set_site_freeform_code`).
 6. Publiceer naar webflow.io en controleer de pagina in de browser.
 
