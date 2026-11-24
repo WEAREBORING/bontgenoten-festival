@@ -1,9 +1,11 @@
-/* Bontgenoten Festival site.js v1.0.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.2.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
   var path = window.location.pathname;
-  var isHome = path === '/' || path === '/index.html';
+  // De pagina met de loader (de oude homepage met split header) herken je aan een zichtbare .loader, niet aan de URL
+  var loaderEl = document.querySelector('.loader');
+  var hasLoader = !!loaderEl && window.getComputedStyle(loaderEl).display !== 'none';
   function each(sel, fn) { [].forEach.call(document.querySelectorAll(sel), fn); }
   function num(el, attr, fallback) { var v = parseFloat(el.getAttribute(attr)); return isNaN(v) ? fallback : v; }
   function ready(fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
@@ -80,11 +82,11 @@
   });
 
   /* Paginaovergang (.transition met .transition_element, in het component transition): bij laden schuiven de balken weg,
-     bij een klik op een interne link schuiven ze dicht en gaat de browser daarna naar de link. Niet op de homepage (die heeft
-     de loader). Uitzonderingen: links met data-transition-prevent, in [data-tabs], target _blank, ankers op dezelfde pagina. */
+     bij een klik op een interne link schuiven ze dicht en gaat de browser daarna naar de link. Niet op een pagina met een zichtbare
+     loader (de oude homepage). Uitzonderingen: links met data-transition-prevent, in [data-tabs], target _blank, ankers op dezelfde pagina. */
   if (document.querySelector('.transition')) withGsap(function (gsap) {
     var stagger = { amount: 0.1, from: 'random' };
-    if (isHome || reduce.matches) gsap.set('.transition', { display: 'none' });
+    if (hasLoader || reduce.matches) gsap.set('.transition', { display: 'none' });
     else gsap.to('.transition_element', { height: '0%', duration: 1, delay: 0.4, ease: 'expo.out', stagger: stagger,
       onComplete: function () { gsap.set('.transition', { display: 'none' }); } });
     document.addEventListener('click', function (e) {
@@ -162,10 +164,10 @@
   }, ['ScrollTrigger']);
 
   /* Hero: [hero-1] t/m [hero-3] schuiven omhoog, [hero-4] van links. Beginstand staat in de head van de pagina.
-     Homepage: eerst de loader (.loader, teller .loader_number, logo .loader_logo-icon); aan het eind klikt het script op
+     Pagina met zichtbare loader: eerst de loader (.loader, teller .loader_number, logo .loader_logo-icon); aan het eind klikt het script op
      .loader_trigger (de interactie die de loader weghaalt) en start de hero 1,2 s later. Andere pagina's: 0,6 s na laden. */
   var heroParts = '[hero-1], [hero-2], [hero-3], [hero-4]';
-  var homeLoader = isHome && document.querySelector('.loader');
+  var homeLoader = hasLoader;
   if (document.querySelector(heroParts) || homeLoader) withGsap(function (gsap) {
     function playHero() {
       if (!document.querySelector(heroParts)) return;
