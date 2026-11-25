@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.9.1: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.10.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -347,6 +347,109 @@
     });
   }, ['ScrollTrigger']);
 
+  /* Bunny-videospeler (Section - Video), naar Osmo's "Custom Bunny HLS Player (Basic)" met dezelfde attributen, alleen het deel
+     dat we gebruiken: [data-bunny-player-init] met data-player-src (HLS .m3u8 van Bunny Stream) en data-player-autoplay="true"
+     speelt stil en in een lus zodra hij in beeld is en pauzeert erbuiten. De <video> maakt site.js (class video_media).
+     [data-player-control="mute"] (een <button> over de hele video) zet het geluid aan en weer uit; site.js houdt aria-label,
+     aria-pressed, data-bgf-cursor-label (de cursortekst) en [data-player-hint] (de tekst op touch) bij.
+     Status voor de css: data-player-status idle/loading/playing/paused, data-player-activated, data-player-muted.
+     Reduced motion: geen autoplay; de knop speelt de video met geluid af en pauzeert hem weer.
+     HLS: Safari speelt .m3u8 zelf, andere browsers via hls.js (alleen geladen als het nodig is). */
+  each('[data-bunny-player-init]', function (player) {
+    var src = player.getAttribute('data-player-src');
+    if (!src) return;
+    var video = player.querySelector('video');
+    if (!video) {
+      video = document.createElement('video');
+      video.className = 'video_media';
+      video.setAttribute('data-bgf-video-zoom', '');   // zoomt mee met de poster (data-bgf-video)
+      player.insertBefore(video, player.firstChild);
+    }
+    var toggle = player.querySelector('[data-player-control="mute"]');
+    var hint = player.querySelector('[data-player-hint]');
+    var autoplay = player.getAttribute('data-player-autoplay') === 'true' && !reduce.matches;
+    video.muted = autoplay;
+    video.loop = autoplay;
+    video.playsInline = true;
+    video.preload = 'none';
+    video.disablePictureInPicture = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('aria-hidden', 'true');   // de knop erboven is het bedienbare element
+    if (autoplay) video.setAttribute('muted', '');
+    if ('disableRemotePlayback' in video) video.disableRemotePlayback = true;
+    function set(name, value) { if (player.getAttribute(name) !== String(value)) player.setAttribute(name, String(value)); }
+
+    // Osmo: native HLS waar de browser het goed kan (Safari met ManagedMediaSource), anders hls.js, anders toch native
+    var nativeHls = !!video.canPlayType('application/vnd.apple.mpegurl') && 'ManagedMediaSource' in window;
+    var attached = null;
+    function attach() {
+      if (!attached) attached = (nativeHls || !window.MediaSource ? Promise.resolve(false)
+        : load('https://cdn.jsdelivr.net/npm/hls.js@1.6.11').then(function () { return window.Hls.isSupported(); }, function () { return false; })
+      ).then(function (useHls) {
+        if (!useHls) { video.src = src; return; }
+        var hls = new window.Hls({ maxBufferLength: 10 });
+        hls.attachMedia(video);
+        hls.on(window.Hls.Events.MEDIA_ATTACHED, function () { hls.loadSource(src); });
+      });
+      return attached;
+    }
+    var wantPlay = false;
+    function play() {
+      wantPlay = true;
+      if (player.getAttribute('data-player-status') !== 'playing') set('data-player-status', 'loading');
+      attach().then(function () {
+        if (!wantPlay) return;
+        var p = video.play();
+        if (p && p.catch) p.catch(function () { set('data-player-status', 'paused'); });
+      });
+    }
+    function pause() { wantPlay = false; video.pause(); }
+
+    function sync() {
+      var text = autoplay ? (video.muted ? 'Geluid aan' : 'Geluid uit') : (video.paused ? 'Afspelen' : 'Pauzeren');
+      set('data-player-muted', video.muted);
+      if (toggle) {
+        toggle.setAttribute('aria-label', text);
+        toggle.setAttribute('data-bgf-cursor-label', text);
+        if (autoplay) toggle.setAttribute('aria-pressed', String(!video.muted));
+        else toggle.removeAttribute('aria-pressed');   // zonder autoplay is het een afspeelknop
+      }
+      if (hint) hint.textContent = text;
+    }
+    video.addEventListener('playing', function () { set('data-player-activated', true); set('data-player-status', 'playing'); sync(); });
+    video.addEventListener('pause', function () { set('data-player-status', 'paused'); sync(); });
+    video.addEventListener('waiting', function () { set('data-player-status', 'loading'); });
+    video.addEventListener('volumechange', sync);
+    sync();
+
+    if (toggle) toggle.addEventListener('click', function () {
+      if (autoplay) { video.muted = !video.muted; if (video.paused) play(); }
+      else if (video.paused) { video.muted = false; play(); }
+      else pause();
+    });
+
+    // in beeld: laden en (autoplay) spelen; uit beeld: pauzeren. Het geluid blijft zoals de bezoeker het zette.
+    new IntersectionObserver(function (entries) {
+      if (entries[0].isIntersecting) { if (autoplay) play(); else attach(); }
+      else if (!video.paused || wantPlay) pause();
+    }, { threshold: 0.1 }).observe(player);
+  });
+
+  /* data-bgf-video (Section - Video): de video komt binnen als afgeronde kaart met creme rand (zoals de galerij-kaart) en opent
+     naar volledig beeld terwijl de bovenkant van de sectie van onder naar boven door het scherm gaat; het beeld zoomt daarbij
+     iets uit. Vanaf 768px, zonder reduced motion. Kaart en beeld: [data-bgf-video-frame], [data-bgf-video-zoom]. */
+  if (document.querySelector('[data-bgf-video]') && !reduce.matches) withGsap(function (gsap) {
+    gsap.matchMedia().add('(min-width: 768px)', function () {
+      each('[data-bgf-video]', function (section) {
+        var range = { trigger: section, start: 'top bottom', end: 'top top', scrub: true };
+        // radius 40px = radius/l (2.5rem), als de galerij-kaart
+        gsap.fromTo(section.querySelector('[data-bgf-video-frame]'), { clipPath: 'inset(9% 6% 9% 6% round 40px)' },
+          { clipPath: 'inset(0% 0% 0% 0% round 0px)', ease: 'none', scrollTrigger: range });
+        gsap.fromTo(section.querySelectorAll('[data-bgf-video-zoom]'), { scale: 1.15 }, { scale: 1, ease: 'none', scrollTrigger: range });
+      });
+    });
+  }, ['ScrollTrigger']);
+
   /* data-bgf-lineup (line-up, basis tot het slider-prototype gekozen is): dagfilter ([data-bgf-lineup-day] = all, zaterdag of
      zondag; de kaarten hebben data-bgf-lineup-item = de Dag uit het CMS), pijltjes schuiven één kaart, teller "01 / 12".
      De rij zelf is een gewone horizontale scroll met snap (sleep, trackpad, swipe). */
@@ -628,7 +731,9 @@
   /* data-bgf-cursor (op Global - Nav): jubileumcursor, twee gekruiste creme ovalen met mix-blend-mode difference, zodat het
      overlappende deel de pagina laat zien. Alleen met muis (hover + fijne pointer) en zonder reduced motion. Standen (Figma 642:2106):
      standaard 26 px, hover 40 px (links, knoppen, [data-bgf-cursor-hover]), ingedrukt 20 px, slepen 80 x 40 ([data-bgf-cursor-drag]).
-     De css staat in site.css (.bgf-cursor). */
+     [data-bgf-cursor-label="tekst"]: hover-stand met de tekst naast de ovalen (Section - Video: "Geluid aan" / "Geluid uit"; de
+     module van het element mag de tekst wisselen, de cursor leest hem bij elke beweging en klik opnieuw).
+     De css staat in site.css (.bgf-cursor, .bgf-cursor-label). */
   var fine = window.matchMedia('(hover: hover) and (pointer: fine)');
   if (document.querySelector('[data-bgf-cursor]') && fine.matches && !reduce.matches) withGsap(function (gsap) {
     // [breedte, hoogte] van het liggende ovaal; het staande ovaal is gespiegeld, behalve bij slepen
@@ -641,8 +746,20 @@
       gsap.set(o, { xPercent: -50, yPercent: -50, opacity: 0 });
       return o;
     });
+    var label = document.createElement('span');
+    label.className = 'bgf-cursor-label';
+    label.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(label);
+    gsap.set(label, { opacity: 0 });
+    ovals.push(label);   // beweegt en verdwijnt mee met de ovalen; zijn plek naast de ovalen staat in site.css
     document.documentElement.classList.add('bgf-cursor-on');
     // direct op de muis, zonder naloop
+    var labelled = null;
+    function setLabel() {
+      var text = labelled ? labelled.getAttribute('data-bgf-cursor-label') : '';
+      if (label.textContent !== text) label.textContent = text;
+      label.style.visibility = text ? '' : 'hidden';
+    }
     var moveX = ovals.map(function (o) { return gsap.quickSetter(o, 'x', 'px'); });
     var moveY = ovals.map(function (o) { return gsap.quickSetter(o, 'y', 'px'); });
     var current = '', hovering = false, pressed = false, dragging = false;
@@ -661,7 +778,9 @@
       moveY.forEach(function (f) { f(e.clientY); });
       gsap.to(ovals, { opacity: 1, duration: 0.2, overwrite: 'auto' });
       var t = e.target instanceof Element ? e.target : null;
-      hovering = !!(t && t.closest(hoverSel));
+      labelled = t && t.closest('[data-bgf-cursor-label]');
+      hovering = !!(t && (labelled || t.closest(hoverSel)));
+      setLabel();
       setState();
     });
     document.addEventListener('mousedown', function (e) {
@@ -669,7 +788,7 @@
       dragging = !!(e.target instanceof Element && e.target.closest('[data-bgf-cursor-drag]'));
       setState();
     });
-    document.addEventListener('mouseup', function () { pressed = false; dragging = false; setState(); });
+    document.addEventListener('mouseup', function () { pressed = false; dragging = false; setState(); setTimeout(setLabel); });   // na de klik: nieuwe tekst
     document.documentElement.addEventListener('mouseleave', function () { gsap.to(ovals, { opacity: 0, duration: 0.2, overwrite: 'auto' }); });
   });
 

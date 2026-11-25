@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.css v1.9.1: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
+/* Bontgenoten Festival site.css v1.10.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
 
 /* Vloeiende root-fontgrootte: 1rem = 16px op het ontwerpformaat (1440 x 900) en daaronder. Groter alleen als het scherm
    zowel breder als hoger is, tot 18px; zo past een sectie ook op een breed maar laag scherm.
@@ -37,6 +37,10 @@ html.lenis, html.lenis body { height: auto; }
 /* Cursor (data-bgf-cursor, site.js maakt de twee ovalen en zet .bgf-cursor-on op html; alleen met muis) */
 .bgf-cursor { position: fixed; left: 0; top: 0; z-index: 10000; border-radius: 50%; background-color: #f4eae1; mix-blend-mode: difference; pointer-events: none; }
 html.bgf-cursor-on, html.bgf-cursor-on * { cursor: none !important; }
+/* tekst naast de ovalen boven [data-bgf-cursor-label] (site.js zet x/y; de plek ten opzichte van de muis staat hier) */
+.bgf-cursor-label { position: fixed; left: 0; top: 0; z-index: 10000; margin: -0.4em 0 0 1.75rem; color: #f4eae1; mix-blend-mode: difference;
+  pointer-events: none; white-space: nowrap; font-family: var(--_typography---font--body); font-weight: 700; font-size: var(--_typography---size--eyebrow);
+  line-height: 1; letter-spacing: 0.04em; text-transform: uppercase; }
 
 /* Global - Nav (data-bgf-nav): de twee streepjes worden een kruis zolang het mobiele menu open is; de pagina scrolt dan niet mee */
 .nav_toggle[aria-expanded="true"] .nav_toggle-line:first-child { transform: translateY(0.25rem) rotate(45deg); }
@@ -80,3 +84,12 @@ html.bgf-nav-open { overflow: hidden; }
 [data-bgf-lineup-day][aria-pressed="true"] { background-color: var(--_theme---action--contrast); color: var(--_theme---action--primary); }
 [data-bgf-lineup-slider] .w-dyn-items { scrollbar-width: none; }
 [data-bgf-lineup-slider] .w-dyn-items::-webkit-scrollbar { display: none; }
+
+/* Section - Video (Bunny-speler, site.js): de video die site.js maakt vult de kaart; de poster verdwijnt zodra de video speelt.
+   De tekst op de knop ("Tik voor geluid") is er alleen zonder de eigen cursor (touch); met muis staat hij naast de cursor. */
+.video_media { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+[data-bunny-player-init] .video_poster { transition: opacity 0.6s linear, visibility 0.6s linear; }
+[data-bunny-player-init][data-player-activated="true"] .video_poster { opacity: 0; visibility: hidden; }
+html.bgf-cursor-on .video_hint { display: none; }
+.video_toggle:focus-visible { outline-offset: -0.5rem; }
+
