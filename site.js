@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.8.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.9.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -320,6 +320,27 @@
           onUpdate: function (self) { update(Math.min(1, self.progress * pinLength() / hero.offsetHeight)); } });
         return function () { update(0); };
       });
+    });
+  }, ['ScrollTrigger']);
+
+  /* data-bgf-card (Section - Gallery): sectie-overgang van het bewegende verloop naar creme. Het creme paneel komt als scheve,
+     kleinere kaart omhoog en trekt recht naar volle breedte zodra zijn bovenkant de bovenkant van het scherm bereikt; de hero
+     erachter ([data-bgf-hero], vastgepind) wordt iets kleiner en donkerder. Vanaf 768px, zonder reduced motion.
+     Bij het opnieuw meten (refreshInit) gaat de transform van het paneel eraf, zodat de parallax erin goed meet. */
+  if (document.querySelector('[data-bgf-card]') && !reduce.matches) withGsap(function (gsap) {
+    gsap.matchMedia().add('(min-width: 768px)', function () {
+      var behind = document.querySelector('[data-bgf-hero]');
+      var panels = [].slice.call(document.querySelectorAll('[data-bgf-card]'));
+      var clear = function () { gsap.set(panels, { clearProps: 'transform' }); };
+      window.ScrollTrigger.addEventListener('refreshInit', clear);
+      panels.forEach(function (panel) {
+        var range = { trigger: panel, start: 'top bottom', end: 'top top', scrub: true };
+        gsap.fromTo(panel, { scale: 0.8, rotate: -4, transformOrigin: '50% 0%' },
+          { scale: 1, rotate: 0, ease: 'none', scrollTrigger: range });
+        if (behind) gsap.fromTo(behind, { scale: 1, filter: 'brightness(1)' }, { scale: 0.92, filter: 'brightness(0.55)', ease: 'none',
+          scrollTrigger: { trigger: panel, start: 'top bottom', end: 'top top', scrub: true } });
+      });
+      return function () { window.ScrollTrigger.removeEventListener('refreshInit', clear); };
     });
   }, ['ScrollTrigger']);
 
