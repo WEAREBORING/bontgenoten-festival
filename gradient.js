@@ -8,7 +8,7 @@
  * Usage: const g = BGFGradient.create(canvas, { preset: 'p7', text: '10' });
  *        g.setPreset('p7rev'); g.setState({ grain: .08 }); g.pause(); g.play(); g.destroy();
  * BORING interaction (all off = ODB's look): setState({ pointerStrips, lens, lensRadius, lensStrength, lensSoftness, pointerSmooth })
- *        + g.setPointer(x, y | null); option below: 'LINE-UP' + g.setScroll(0..1) slides the sheet behind the glass.
+ *        + g.setPointer(x, y | null); g.setStripShift(p) slides the strips p strip widths to the left; option below: 'LINE-UP' + g.setScroll(0..1) slides the sheet behind the glass.
  * BORING live mask: g.setMask(canvas) replaces the text with any canvas (white = shape, black = empty), drawn like the source:
  *        the viewport is the middle 1/(1+2*0.3) of it (g.maskInset tells the inset as a fraction). Call g.updateMask() after drawing.
  * Needs the font family "Suisse BP" (weight 700) loaded on the page for the 10 to match.
@@ -439,7 +439,7 @@ class Engine {
     const short = Math.min(W, H), asp = [W/short, H/short];
     const pose = poseAt(st, t), sd = seeded(st);
     const bx = st.boring || {}; // BORING: interaction from the wrapper; empty = ODB's render
-    if (bx.strips){ pose.strips = Math.max(1, lerp(st.stripsMin, st.stripsMax, bx.strips.s)); pose.phase += bx.strips.phase; }
+    if (bx.strips){ if (bx.strips.s != null) pose.strips = Math.max(1, lerp(st.stripsMin, st.stripsMax, bx.strips.s)); pose.phase += bx.strips.phase; } // BORING: s null = keep ODB's strip count (strip shift only)
     // 1. camera → mask (op het blur-niveau)
     const sigma = pose.blur * short;
     const L = sigma > 6 ? clamp(Math.ceil(Math.log2(sigma/6)), 0, 5) : 0;
@@ -596,6 +596,7 @@ function create(canvas, options){
   let state = Object.assign(presetState(o.preset), { text:o.text, below:o.below, belowMargin:o.belowMargin }, pick(options, Object.keys(INTERACT)));
   let playing = false, tNow = 0, playStart = 0, raf = 0, dirty = true, srcDirty = true, srcBusy = false, momentsStale = true, dead = false;
   let shown = false; // BORING: first frame drawn → 'bgf:rendered' on the canvas
+  let stripShift = 0; // BORING: extra strip phase from the page (setStripShift), in strip widths
   let sheet = null, last = 0, ptr = null, scrollT = 0, liveMask = null, maskDirty = false; // BORING: liveMask = caller's canvas instead of the text // sheet: tall-source geometry; ptr: {x,y} canvas 0..1 or null
   const sp = { sx:{x:.5,v:0}, lx:{x:.5,v:0}, ly:{x:.5,v:0}, la:{x:0,v:0}, sc:{x:0,v:0} };
   function pick(src, keys){ const r = {}; for (const k of keys) if (src && k in src) r[k] = src[k]; return r; }
@@ -640,6 +641,7 @@ function create(canvas, options){
       moving = damp(sp.la, on ? 1 : 0, st.pointerSmooth, dt) || moving;
       if (sp.la.x > 1e-3){ const short = Math.min(view.W, view.H);
         bx = Object.assign(bx || {}, { px:(sp.lx.x - .5)*view.W/short, py:(sp.ly.x - .5)*view.H/short, lensR:st.lensRadius, lensAmt:clamp(st.lensStrength, 0, 1)*clamp(sp.la.x, 0, 1), lensSoft:clamp(st.lensSoftness, 0, 1) }); } }
+    if (stripShift){ const b0 = bx && bx.strips; bx = Object.assign(bx || {}, { strips:{ s:b0 ? b0.s : null, phase:(b0 ? b0.phase : 0) + stripShift } }); }
     if (sheet){ moving = damp(sp.sc, scrollT, st.scrollSmooth, dt) || moving;
       bx = Object.assign(bx || {}, { srcCY:sheet.srcCY, srcHY:sheet.srcHY, offY:clamp(sp.sc.x, 0, 1)*sheet.step }); }
     return { bx, moving };
@@ -676,6 +678,8 @@ function create(canvas, options){
       Object.assign(state, patch); if (keepPhase) playStart = performance.now() - tNow*state.loopSec*1000; if (Object.keys(patch).some(k => SOURCE_KEYS.has(k))){ srcDirty = true; momentsStale = true; } dirty = true; kick(); },
     // BORING: pointer in canvas-relative 0..1 (y down); null = no pointer, strips and lens settle to neutral
     setPointer(x, y){ ptr = x == null ? null : { x:+x, y:+y }; kick(); },
+    // BORING: slide the glass strips sideways by p strip widths (positive = to the left), e.g. along with a marquee
+    setStripShift(p){ stripShift = +p || 0; dirty = true; kick(); },
     // BORING: 0 = first text, 1 = the 'below' text fully in view; smoothed by scrollSmooth (0 = jump)
     setScroll(p, jump){ scrollT = clamp(+p || 0, 0, 1); if (jump){ sp.sc.x = scrollT; sp.sc.v = 0; dirty = true; } kick(); },
     seek(t){ tNow = ((t%1)+1)%1; if (playing) playStart = performance.now() - tNow*state.loopSec*1000; dirty = true; kick(); },
