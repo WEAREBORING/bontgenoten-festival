@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.9.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.9.1: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -314,6 +314,9 @@
         // eerst de tekst-trigger, dan de pin: een trigger op hetzelfde element ná een pin begint pas na die pin
         gsap.to(hero.querySelectorAll('[data-bgf-hero-out]'), { y: '-6rem', opacity: 0, ease: 'none',
           scrollTrigger: { trigger: hero, start: 'top top', end: function () { return '+=' + hero.offsetHeight * 0.6; }, scrub: true } });
+        // zijteksten mee weg (de hero blijft staan onder de line-up); alleen opacity, ze staan met transform in het midden
+        gsap.fromTo(hero.querySelectorAll('[data-bgf-hero-fade]'), { opacity: 1 }, { opacity: 0, ease: 'none', immediateRender: false,
+          scrollTrigger: { trigger: hero, start: 'top top', end: function () { return '+=' + hero.offsetHeight * 0.4; }, scrub: true } });
         var pinLength = function () { return hero.offsetHeight + (lineupSection ? lineupSection.offsetHeight : 0); };
         window.ScrollTrigger.create({ trigger: hero, start: 'top top', end: function () { return '+=' + pinLength(); },
           pin: true, pinSpacing: false, invalidateOnRefresh: true,
@@ -325,7 +328,7 @@
 
   /* data-bgf-card (Section - Gallery): sectie-overgang van het bewegende verloop naar creme. Het creme paneel komt als scheve,
      kleinere kaart omhoog en trekt recht naar volle breedte zodra zijn bovenkant de bovenkant van het scherm bereikt; de hero
-     erachter ([data-bgf-hero], vastgepind) wordt iets kleiner en donkerder. Vanaf 768px, zonder reduced motion.
+     erachter ([data-bgf-hero], vastgepind) wordt donkerder (niet kleiner). Vanaf 768px, zonder reduced motion.
      Bij het opnieuw meten (refreshInit) gaat de transform van het paneel eraf, zodat de parallax erin goed meet. */
   if (document.querySelector('[data-bgf-card]') && !reduce.matches) withGsap(function (gsap) {
     gsap.matchMedia().add('(min-width: 768px)', function () {
@@ -337,7 +340,7 @@
         var range = { trigger: panel, start: 'top bottom', end: 'top top', scrub: true };
         gsap.fromTo(panel, { scale: 0.8, rotate: -4, transformOrigin: '50% 0%' },
           { scale: 1, rotate: 0, ease: 'none', scrollTrigger: range });
-        if (behind) gsap.fromTo(behind, { scale: 1, filter: 'brightness(1)' }, { scale: 0.92, filter: 'brightness(0.55)', ease: 'none',
+        if (behind) gsap.fromTo(behind, { filter: 'brightness(1)' }, { filter: 'brightness(0.55)', ease: 'none',
           scrollTrigger: { trigger: panel, start: 'top bottom', end: 'top top', scrub: true } });
       });
       return function () { window.ScrollTrigger.removeEventListener('refreshInit', clear); };
