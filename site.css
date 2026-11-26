@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.css v1.11.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
+/* Bontgenoten Festival site.css v1.12.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
 
 /* Vloeiende root-fontgrootte: 1rem = 16px op het ontwerpformaat (1440 x 900) en daaronder. Groter alleen als het scherm
    zowel breder als hoger is, tot 18px; zo past een sectie ook op een breed maar laag scherm.
@@ -47,9 +47,9 @@ html.bgf-cursor-on, html.bgf-cursor-on * { cursor: none !important; }
 .nav_toggle[aria-expanded="true"] .nav_toggle-line:last-child { transform: translateY(-0.25rem) rotate(-45deg); }
 html.bgf-nav-open { overflow: hidden; }
 /* Tickets-knop in de nav: Creme boven de hero en footer (data-bgf-nav-dark), anders zwart (zoals de Black-variant) */
-[data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_wrapper { background-color: var(--_theme---action--primary); border-color: var(--_theme---action--primary); }   /* variant Creme hover-rand: de rand kleurt mee */
+[data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_wrapper { border-color: var(--_theme---action--primary); }   /* variant Creme hover-rand: de lijnen zijn de achtergrond, de rand kleurt mee */
 [data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_text { color: var(--_theme---action--contrast); text-shadow: 0 1em 0 var(--_theme---action--primary); }
-[data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_background-line { background-color: var(--_theme---action--contrast); }
+[data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_background-line { background-color: var(--_theme---action--primary); }
 
 /* data-bgf-tabs (Section - FAQ): de actieve tab is gevuld (zwart met creme tekst). Hover = de knop-hover: lijnen vullen (site.js)
    en de tekst schuift naar zijn creme kopie (text-shadow), alleen desktop met muis en niet op de actieve tab */

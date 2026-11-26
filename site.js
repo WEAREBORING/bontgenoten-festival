@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.11.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.12.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -121,7 +121,9 @@
   });
 
   /* .button_wrapper: de lijnen (.button_background-line) vullen de knop bij hover. Alleen desktop met muis.
-     Zelfde hover voor andere knoppen met lijnen [data-bgf-fill-line] (twee niveaus diep, zoals de FAQ-tabs); niet op de actieve tab. */
+     Zelfde hover voor andere knoppen met lijnen [data-bgf-fill-line] (twee niveaus diep, zoals de FAQ-tabs); niet op de actieve tab.
+     Andersom bij Button "Creme hover-rand": daar zijn de lijnen in rust vol (ze vormen de achtergrond) en zakken ze bij hover weg,
+     zodat de knop doorzichtig wordt met alleen de rand. */
   if (document.querySelector('.button_background-line, [data-bgf-fill-line]')) withGsap(function (gsap) {
     var desktop = window.matchMedia('(hover: hover) and (min-width: 992px)');
     var hosts = [].slice.call(document.querySelectorAll('.button_wrapper'));
@@ -132,13 +134,14 @@
     hosts.forEach(function (button) {
       var lines = button.querySelectorAll('.button_background-line, [data-bgf-fill-line]');
       if (!lines.length) return;
+      var full = parseFloat(window.getComputedStyle(lines[0]).height) > 0;   // lijnen in rust vol = omgekeerde hover
       function fill(height) {
         gsap.to(lines, { height: height, duration: 0.4, ease: 'expo.out', stagger: { amount: 0.15, from: 'random' }, overwrite: true });
       }
       button.addEventListener('mouseenter', function () {
-        if (desktop.matches && !reduce.matches && button.getAttribute('aria-selected') !== 'true') fill('101%');
+        if (desktop.matches && !reduce.matches && button.getAttribute('aria-selected') !== 'true') fill(full ? '0%' : '101%');
       });
-      button.addEventListener('mouseleave', function () { fill('0%'); });
+      button.addEventListener('mouseleave', function () { fill(full ? '100%' : '0%'); });
     });
   });
 
@@ -286,7 +289,7 @@
 
   /* data-bgf-hero (Section - Hero): [data-bgf-hero-item] komen om de beurt omhoog in beeld na de paginaovergang, [data-bgf-hero-fade]
      faden in. Vanaf 992px met muis blijft de hero daarna staan (pin) terwijl de volgende secties eroverheen schuiven, en gaat
-     [data-bgf-hero-out] omhoog weg. Twee standen, vanzelf gekozen:
+     [data-bgf-hero-out] scrolt mee weg. Twee standen, vanzelf gekozen:
      - zonder line-up (geen [data-bgf-lineup] op de pagina): pin van één schermhoogte; de 10 lost op in het verloop (meer blur)
      - met line-up: pin tot het eind van de line-up; in het glas schuift de 10 weg en komt LINE-UP in beeld (de engine krijgt
        below: 'LINE-UP', zie data-bgf-gradient); geen blur
@@ -312,8 +315,9 @@
           else g.setState({ blurMin: lerp(0.006, 0.09, p), blurMax: lerp(0.075, 0.12, p) });
         };
         // eerst de tekst-trigger, dan de pin: een trigger op hetzelfde element ná een pin begint pas na die pin
-        gsap.to(hero.querySelectorAll('[data-bgf-hero-out]'), { y: '-6rem', opacity: 0, ease: 'none',
-          scrollTrigger: { trigger: hero, start: 'top top', end: function () { return '+=' + hero.offsetHeight * 0.6; }, scrub: true } });
+        // de inhoud in het midden scrolt gewoon weg (1:1 met de pagina, geen fade), ook al staat de hero vast (BORING 2026-11-26)
+        gsap.to(hero.querySelectorAll('[data-bgf-hero-out]'), { y: function () { return -hero.offsetHeight; }, ease: 'none',
+          scrollTrigger: { trigger: hero, start: 'top top', end: function () { return '+=' + hero.offsetHeight; }, scrub: true, invalidateOnRefresh: true } });
         // zijteksten mee weg (de hero blijft staan onder de line-up); alleen opacity, ze staan met transform in het midden
         gsap.fromTo(hero.querySelectorAll('[data-bgf-hero-fade]'), { opacity: 1 }, { opacity: 0, ease: 'none', immediateRender: false,
           scrollTrigger: { trigger: hero, start: 'top top', end: function () { return '+=' + hero.offsetHeight * 0.4; }, scrub: true } });
