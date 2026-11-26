@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.css v1.14.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
+/* Bontgenoten Festival site.css v1.15.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
 
 /* Vloeiende root-fontgrootte: 1rem = 16px op het ontwerpformaat (1440 x 900) en daaronder. Groter alleen als het scherm
    zowel breder als hoger is, tot 18px; zo past een sectie ook op een breed maar laag scherm.
@@ -76,6 +76,10 @@ html.bgf-nav-open { overflow: hidden; }
 /* Antwoorden uit het CMS: links in de tekstkleur, onderstreept (Webflow kan geen nested selector via de API) */
 .faq_answer-text a { color: inherit; text-decoration: underline; }
 
+/* data-bgf-hero: de zijteksten scrollen mee weg met de inhoud (site.js zet --bgf-hero-out op de hero); losse translate, want de
+   transform van de class zet ze in het midden en draait ze */
+[data-bgf-hero-fade] { translate: 0 var(--bgf-hero-out, 0px); }
+
 /* data-bgf-gradient (hero, footer-CTA, marquee): de live canvas ligt over de still en faded in zodra het eerste beeld er is */
 .bgf-gradient { position: absolute; top: 0; left: 0; z-index: -2; width: 100%; height: 100%; opacity: 0; transition: opacity 1.2s ease; pointer-events: none; }
 .bgf-gradient[data-bgf-ready] { opacity: 1; }
@@ -85,8 +89,7 @@ html.bgf-nav-open { overflow: hidden; }
 [data-bgf-gradient-text][data-bgf-live] { background-image: none !important; -webkit-text-fill-color: transparent; }
 [data-bgf-baseline] { display: inline-block; width: 0; height: 0; vertical-align: baseline; }
 
-/* data-bgf-card (site.js): naast een scheve kaart zie je zwart; de zwarte laag over de hero (.bgf-dim) kleurt mee met de eerste kaart */
-.main-wrapper:has([data-bgf-card]) { background-color: var(--_theme---surface--dark); }
+/* data-bgf-card (site.js): de zwarte laag over de hero (.bgf-dim) kleurt mee met de eerste kaart; naast de kaarten is de pagina creme */
 .bgf-dim { position: absolute; inset: 0; z-index: 5; background-color: var(--_theme---surface--dark); opacity: 0; pointer-events: none; }
 
 /* Alleen voor schermlezers (site.js maakt zulke teksten, zoals de aankondiging van de line-up) */
@@ -94,6 +97,11 @@ html.bgf-nav-open { overflow: hidden; }
 
 /* data-bgf-lineup: de gekozen dag is gevuld, de rij heeft geen zichtbare scrollbalk (zonder site.js: gewone scrollrij) */
 [data-bgf-lineup-day][aria-pressed="true"] { background-color: var(--_theme---action--contrast); color: var(--_theme---action--primary); }
+/* Met site.js schuift een creme pil (.bgf-day-pill) onder de dagknoppen naar de gekozen dag; de knop zelf blijft doorzichtig */
+[data-bgf-day-pill] { position: relative; }
+.bgf-day-pill { position: absolute; left: 0; top: 0; border-radius: inherit; background-color: var(--_theme---action--contrast); pointer-events: none; }
+[data-bgf-day-pill] [data-bgf-lineup-day] { position: relative; z-index: 1; transition: color 0.3s ease; }
+[data-bgf-day-pill] [data-bgf-lineup-day][aria-pressed="true"] { background-color: transparent; }
 [data-bgf-lineup-slider] .w-dyn-items { scrollbar-width: none; }
 [data-bgf-lineup-slider] .w-dyn-items::-webkit-scrollbar { display: none; }
 
@@ -112,7 +120,8 @@ html.bgf-cursor-on .video_hint { display: none; }
 [data-bgf-lineup-ready] .lineup_list { position: absolute; left: 50%; top: 0; width: 1440px; height: 680px; margin-left: -720px; padding: 0; display: block;
   overflow: visible; scroll-snap-type: none; transform: scale(var(--k, 1)); transform-origin: 50% 0; perspective: 2400px; perspective-origin: 720px 300px;
   cursor: grab; user-select: none; -webkit-user-select: none; touch-action: pan-y; }
-[data-bgf-lineup-ready] .lineup_item { position: absolute; left: 480px; top: 0; width: 480px; height: 600px; will-change: transform; backface-visibility: hidden; }
+[data-bgf-lineup-ready] .lineup_item { position: absolute; left: 480px; top: 0; width: 480px; height: 600px; will-change: transform; backface-visibility: hidden;
+  translate: var(--bgf-out-x, 0px) 0; }   /* --bgf-out-x: kaarten wisselen bij een andere dag (site.js); de transform is van de cilinder */
 [data-bgf-lineup-ready] .lineup_card { display: block; width: 100%; height: 100%; border-radius: 16px; overflow: hidden; background-color: #1a1a1a; -webkit-tap-highlight-color: transparent; }
 [data-bgf-lineup-ready] .lineup_card:focus-visible { outline-offset: -4px; }
 [data-bgf-lineup-ready] .lineup_card { position: relative; }
@@ -132,3 +141,29 @@ html.bgf-cursor-on .video_hint { display: none; }
   [data-bgf-lineup-backdrop] { display: none; }
 }
 
+/* Text trim (figma-to-webflow, webflow-conventies 10): geen ruimte boven de hoofdletters en onder de basislijn, zodat de spacing in
+   Webflow de echte spacing is. Op alle 2027-teksten (niet op Zongenoten: die heeft eigen classes). De browser trimt zelf
+   (text-box, Chrome 133+, Safari 18.2+); daarbuiten (Firefox) de berekening uit de fontbestanden (hhea en hoofdletterhoogte):
+   Suisse BP Int'l boven 0.414em, onder 0.25em; TAN - Waltzing Mathilde boven 0.524em, onder 0.476em.
+   Niet getrimd, met reden: knopteksten en FAQ-tabs (de tekst schuift met translateY(-100%) naar een kopie op 1em), de galerijtitel
+   (het live verloop knipt op de letters en heeft de padding nodig), de verticale zijteksten van de hero en tekst direct in een
+   flex-knop (FAQ-vraag, dagknoppen: hun padding is de maat). */
+:where(.hero_date, .lineup_title, .lineup_counter, .lineup_info-name, .lineup_info-tag, .lineup_info-genre, .quote_eyebrow, .quote_text,
+  .about_eyebrow, .about_title, .about_text > *, .faq_eyebrow, .faq_title, .faq_answer-text > *, .faq-contact_title, .logo-wall_heading,
+  .cta_location, .cta_city, .cta_time, .cta_day, .cta_date, .cta_title, .footer_heading, .footer_text, .footer_detail, .footer_legal-link) {
+  --bgf-trim-top: 0.414em; --bgf-trim-bottom: 0.25em;
+  text-box: trim-both cap alphabetic;
+}
+:where(.hero_date, .quote_text, .cta_date, .footer_heading) { --bgf-trim-top: 0.524em; --bgf-trim-bottom: 0.476em; }
+@supports not (text-box: trim-both cap alphabetic) {
+  :where(.hero_date, .lineup_title, .lineup_counter, .lineup_info-name, .lineup_info-tag, .lineup_info-genre, .quote_eyebrow, .quote_text,
+    .about_eyebrow, .about_title, .about_text > *, .faq_eyebrow, .faq_title, .faq_answer-text > *, .faq-contact_title, .logo-wall_heading,
+    .cta_location, .cta_city, .cta_time, .cta_day, .cta_date, .cta_title, .footer_heading, .footer_text, .footer_detail, .footer_legal-link)::before {
+    content: ""; display: table; margin-bottom: calc(var(--bgf-trim-top) - 0.5lh);
+  }
+  :where(.hero_date, .lineup_title, .lineup_counter, .lineup_info-name, .lineup_info-tag, .lineup_info-genre, .quote_eyebrow, .quote_text,
+    .about_eyebrow, .about_title, .about_text > *, .faq_eyebrow, .faq_title, .faq_answer-text > *, .faq-contact_title, .logo-wall_heading,
+    .cta_location, .cta_city, .cta_time, .cta_day, .cta_date, .cta_title, .footer_heading, .footer_text, .footer_detail, .footer_legal-link)::after {
+    content: ""; display: table; margin-top: calc(var(--bgf-trim-bottom) - 0.5lh);
+  }
+}

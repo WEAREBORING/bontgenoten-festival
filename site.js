@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.14.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.15.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -122,26 +122,48 @@
 
   /* .button_wrapper: de lijnen (.button_background-line) vullen de knop bij hover. Alleen desktop met muis.
      Zelfde hover voor andere knoppen met lijnen [data-bgf-fill-line] (twee niveaus diep, zoals de FAQ-tabs); niet op de actieve tab.
-     Andersom bij Button "Creme hover-rand": daar zijn de lijnen in rust vol (ze vormen de achtergrond) en zakken ze bij hover weg,
-     zodat de knop doorzichtig wordt met alleen de rand. */
+     Alles beweegt omhoog (BORING 2026-11-26): een lijn is altijd vol hoog en schuift door de knop (yPercent, de achtergrond knipt):
+     erin = van onder naar het midden, eruit = van het midden naar boven; daarna staat hij weer onder klaar.
+     Button "Creme hover-rand" andersom: daar zijn de lijnen in rust vol (ze vormen de achtergrond), bij hover gaan ze eruit
+     (omhoog weg, de knop wordt doorzichtig met alleen de rand) en bij verlaten komen ze er van onder weer in.
+     Snel in en uit of halverwege terug: een lijn die nog boven weg aan het gaan is, keert om; nooit een sprong. */
   if (document.querySelector('.button_background-line, [data-bgf-fill-line]')) withGsap(function (gsap) {
-    var desktop = window.matchMedia('(hover: hover) and (min-width: 992px)');
+    var desktop = window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 992px)');
     var hosts = [].slice.call(document.querySelectorAll('.button_wrapper'));
     each('[data-bgf-fill-line]', function (line) {
       var host = line.parentNode.parentNode;
       if (hosts.indexOf(host) < 0) hosts.push(host);
     });
+    var stagger = { amount: 0.15, from: 'random' };
+    function fillIn(lines) {
+      // wat boven weg is (of bijna), begint weer onder; wat nog onderweg is, keert vanaf waar het is
+      [].forEach.call(lines, function (l) { if (gsap.getProperty(l, 'yPercent') <= -100) gsap.set(l, { yPercent: 101 }); });
+      gsap.to(lines, { yPercent: 0, duration: 0.4, ease: 'expo.out', stagger: stagger, overwrite: true });
+    }
+    function fillOut(lines) {
+      gsap.to(lines, { yPercent: -101, duration: 0.4, ease: 'expo.out', stagger: stagger, overwrite: true,
+        onComplete: function () { gsap.set(lines, { yPercent: 101 }); } });
+    }
     hosts.forEach(function (button) {
       var lines = button.querySelectorAll('.button_background-line, [data-bgf-fill-line]');
       if (!lines.length) return;
       var full = parseFloat(window.getComputedStyle(lines[0]).height) > 0;   // lijnen in rust vol = omgekeerde hover
-      function fill(height) {
-        gsap.to(lines, { height: height, duration: 0.4, ease: 'expo.out', stagger: { amount: 0.15, from: 'random' }, overwrite: true });
+      gsap.set(lines, { height: '101%', yPercent: full ? 0 : 101 });
+      var on = false;
+      function enter() {
+        if (on || !desktop.matches || reduce.matches || button.getAttribute('aria-selected') === 'true') return;
+        on = true;
+        if (full) fillOut(lines); else fillIn(lines);
       }
-      button.addEventListener('mouseenter', function () {
-        if (desktop.matches && !reduce.matches && button.getAttribute('aria-selected') !== 'true') fill(full ? '0%' : '101%');
-      });
-      button.addEventListener('mouseleave', function () { fill(full ? '100%' : '0%'); });
+      function leave() {
+        if (!on) return;
+        on = false;
+        if (full) fillIn(lines); else fillOut(lines);
+      }
+      button.addEventListener('mouseenter', enter);
+      button.addEventListener('mouseleave', leave);
+      // naar tablet of touch terwijl de muis erop staat: terug naar rust
+      desktop.addEventListener('change', leave);
     });
   });
 
@@ -316,21 +338,23 @@
         };
         // eerst de tekst-trigger, dan de pin: een trigger op hetzelfde element ná een pin begint pas na die pin
         // de inhoud in het midden scrolt gewoon weg (1:1 met de pagina, geen fade), ook al staat de hero vast (BORING 2026-11-26)
-        gsap.to(hero.querySelectorAll('[data-bgf-hero-out]'), { y: function () { return -hero.offsetHeight; }, ease: 'none',
-          scrollTrigger: { trigger: hero, start: 'top top', end: function () { return '+=' + hero.offsetHeight; }, scrub: true, invalidateOnRefresh: true } });
-        // de zijteksten blijven staan (designer 2026-11-26)
+        var outRange = function () { return { trigger: hero, start: 'top top', end: function () { return '+=' + hero.offsetHeight; }, scrub: true, invalidateOnRefresh: true }; };
+        gsap.to(hero.querySelectorAll('[data-bgf-hero-out]'), { y: function () { return -hero.offsetHeight; }, ease: 'none', scrollTrigger: outRange() });
+        // de zijteksten (locaties) scrollen mee weg (BORING 2026-11-26). Ze staan met transform (translateY(-50%), rotate) in het midden;
+        // daarom schuift een eigen variabele de losse translate (site.css), zodat die transform blijft staan
+        gsap.fromTo(hero, { '--bgf-hero-out': '0px' }, { '--bgf-hero-out': function () { return -hero.offsetHeight + 'px'; }, ease: 'none', scrollTrigger: outRange() });
         var pinLength = function () { return hero.offsetHeight + (lineupSection ? lineupSection.offsetHeight : 0); };
         window.ScrollTrigger.create({ trigger: hero, start: 'top top', end: function () { return '+=' + pinLength(); },
           pin: true, pinSpacing: false, invalidateOnRefresh: true,
           onUpdate: function (self) { update(Math.min(1, self.progress * pinLength() / hero.offsetHeight)); } });
-        return function () { update(0); };
+        return function () { update(0); hero.style.removeProperty('--bgf-hero-out'); };
       });
     });
   }, ['ScrollTrigger']);
 
   /* data-bgf-card: harde sectie-overgang. De sectie komt als scheve, kleinere kaart omhoog en trekt recht naar volle breedte zodra
-     haar bovenkant de bovenkant van het scherm bereikt. De kanteling wisselt per kaart links/rechts (designer 2026-11-26); naast de
-     kaart zie je zwart (.main-wrapper, site.css). Achter de eerste kaart staat de vastgepinde hero: die wordt donkerder met een zwarte
+     haar bovenkant de bovenkant van het scherm bereikt. De kanteling wisselt per kaart links/rechts (designer 2026-11-26). Sinds BORING
+     2026-11-26 alleen op galerij, video, quote (festival) en footer; naast de kaart zie je de creme pagina. Achter de eerste kaart staat de vastgepinde hero: die wordt donkerder met een zwarte
      laag (.bgf-dim; goedkoper dan filter: brightness) en tekent niet meer zodra de kaart hem helemaal bedekt.
      Vanaf 768px, zonder reduced motion. Bij het opnieuw meten (refreshInit) gaat de transform eraf, zodat alles goed meet. */
   if (document.querySelector('[data-bgf-card]') && !reduce.matches) withGsap(function (gsap) {
@@ -357,18 +381,47 @@
     });
   }, ['ScrollTrigger']);
 
-  /* data-bgf-scroll-text (Section - Quote): de tekst kleurt woord voor woord in terwijl je scrolt (van 15% naar vol). Vanaf 768px
-     staat de sectie daarbij even vast (pin, één schermhoogte), daaronder loopt het mee met de sectie. Reduced motion: gewone tekst. */
+  /* data-bgf-scroll-text (Section - Quote): de tekst komt woord voor woord binnen terwijl je scrolt, met kleur zoals de Cultuur-sectie
+     van Afix (data-a-fill): een woord is eerst een wazige gloed in een jubileumkleur, de letters komen in die kleur op en worden dan
+     scherpe tekst in de eigen kleur. De gloed loopt in de volgorde van het verloop door de tekst (honey, sunset, cayenne, pine, lagoon,
+     flamingo), zodat het verloop over de quote schuift. Woorden die nog moeten komen staan op 15%. Vanaf 768px staat de sectie daarbij
+     even vast (pin, één schermhoogte), daaronder loopt het mee met de sectie. Reduced motion: gewone tekst. */
   if (document.querySelector('[data-bgf-scroll-text]') && !reduce.matches) withGsap(function (gsap) {
+    var BRAND = [[253, 174, 4], [245, 117, 19], [255, 42, 0], [3, 53, 9], [5, 128, 205], [236, 124, 238]];
+    var clamp01 = function (v) { return Math.max(0, Math.min(1, v)); };
+    var mix = function (a, b, t) { return a.map(function (v, k) { return Math.round(v + (b[k] - v) * t); }); };
+    // kleur op plek u (0..1) van het verloop
+    var brandAt = function (u) { var x = clamp01(u) * (BRAND.length - 1), i = Math.min(BRAND.length - 2, Math.floor(x)); return mix(BRAND[i], BRAND[i + 1], x - i); };
     document.fonts.ready.then(function () {
       each('[data-bgf-scroll-text]', function (el) {
         var section = el.closest('section') || el;
         var words = window.SplitText.create(el, { type: 'words', wordsClass: 'bgf-scroll-word' }).words;
+        var ink = (getComputedStyle(el).color.match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3).map(Number);
+        var glows = words.map(function (w, i) { return brandAt(words.length > 1 ? i / (words.length - 1) : 0); });
+        var soft = 8, last = [];   // soft = over hoeveel woorden één woord binnenkomt
+        // t = 0..1 per woord: eerst gloed (letters doorzichtig), dan scherp in de eigen kleur
+        function draw(n) {
+          words.forEach(function (w, i) {
+            var t = Math.round((1 - Math.pow(1 - clamp01((n - i) / soft), 3)) * 40) / 40;
+            if (last[i] === t) return;
+            last[i] = t;
+            if (t === 0) { w.style.opacity = 0.15; w.style.color = ''; w.style.textShadow = ''; return; }
+            if (t === 1) { w.style.opacity = ''; w.style.color = ''; w.style.textShadow = ''; return; }
+            // c = van kleur naar eigen kleur (pas in de tweede helft); de letters gaan van doorzichtig naar dekkend in de jubileumkleur
+            var c = clamp01((t - 0.5) / 0.5);
+            w.style.opacity = Math.max(0.15, clamp01(t / 0.35));
+            w.style.color = 'rgba(' + mix(glows[i], ink, c).join(', ') + ', ' + clamp01((t - 0.1) / 0.4).toFixed(3) + ')';
+            w.style.textShadow = 'rgba(' + glows[i].join(', ') + ', ' + (0.9 * (1 - c)).toFixed(3) + ') 0 0 ' + (0.14 - 0.06 * c).toFixed(3) + 'em';
+          });
+        }
+        draw(0);
         gsap.matchMedia().add({ wide: '(min-width: 768px)', narrow: '(max-width: 767px)' }, function (ctx) {
           var st = ctx.conditions.wide
-            ? { trigger: section, start: 'top top', end: '+=100%', pin: true, pinSpacing: true, scrub: true }   // pinSpacing expliciet: .main-wrapper is flex (dan staat het standaard uit)
-            : { trigger: el, start: 'top 80%', end: 'bottom 45%', scrub: true };
-          gsap.fromTo(words, { opacity: 0.15 }, { opacity: 1, ease: 'none', stagger: 0.1, scrollTrigger: st });
+            ? { trigger: section, start: 'top top', end: '+=100%', pin: true, pinSpacing: true }   // pinSpacing expliciet: .main-wrapper is flex (dan staat het standaard uit)
+            : { trigger: el, start: 'top 80%', end: 'bottom 45%' };
+          st.onUpdate = function (self) { draw(self.progress * (words.length + soft)); };
+          st.onRefresh = st.onUpdate;
+          window.ScrollTrigger.create(st);
         });
         // de pin komt pas na het laden van de fonts: triggers verderop opnieuw meten
         window.ScrollTrigger.sort(); window.ScrollTrigger.refresh();
@@ -391,7 +444,6 @@
     if (!video) {
       video = document.createElement('video');
       video.className = 'video_media';
-      video.setAttribute('data-bgf-video-zoom', '');   // zoomt mee met de poster (data-bgf-video)
       player.insertBefore(video, player.firstChild);
     }
     var toggle = player.querySelector('[data-player-control="mute"]');
@@ -464,21 +516,6 @@
       else if (!video.paused || wantPlay) pause();
     }, { threshold: 0.1 }).observe(player);
   });
-
-  /* data-bgf-video (Section - Video): de video komt binnen als afgeronde kaart met creme rand (zoals de galerij-kaart) en opent
-     naar volledig beeld terwijl de bovenkant van de sectie van onder naar boven door het scherm gaat; het beeld zoomt daarbij
-     iets uit. Vanaf 768px, zonder reduced motion. Kaart en beeld: [data-bgf-video-frame], [data-bgf-video-zoom]. */
-  if (document.querySelector('[data-bgf-video]') && !reduce.matches) withGsap(function (gsap) {
-    gsap.matchMedia().add('(min-width: 768px)', function () {
-      each('[data-bgf-video]', function (section) {
-        var range = { trigger: section, start: 'top bottom', end: 'top top', scrub: true };
-        // radius 40px = radius/l (2.5rem), als de galerij-kaart
-        gsap.fromTo(section.querySelector('[data-bgf-video-frame]'), { clipPath: 'inset(9% 6% 9% 6% round 40px)' },
-          { clipPath: 'inset(0% 0% 0% 0% round 0px)', ease: 'none', scrollTrigger: range });
-        gsap.fromTo(section.querySelectorAll('[data-bgf-video-zoom]'), { scale: 1.15 }, { scale: 1, ease: 'none', scrollTrigger: range });
-      });
-    });
-  }, ['ScrollTrigger']);
 
   /* data-bgf-lineup (Section Line-up, optie 2 "cilinder", Figma 642:1806 met meer lucht; gekozen door de klant 2026-11-26).
      De kaarten zijn de items van de Collection List (CMS Line-up): [data-bgf-lineup-item] = Dag, met daarin [data-bgf-lineup-name],
@@ -680,34 +717,77 @@
         }
       });
 
-      // dagknoppen: baan weg, lijst wisselen, baan terug
+      /* dagknoppen, zoals de Kennis-tabs van Afix (data-a-tabs): een creme pil (.bgf-day-pill, site.js maakt hem) schuift naar de
+         gekozen dag; de kaarten gaan na elkaar weg naar de kant tegengesteld aan de pil (pil naar rechts = kaarten naar links) en de
+         nieuwe komen na elkaar binnen van de kant waar de pil heen gaat. De kaart beweegt met --bgf-out-x (losse translate in site.css,
+         want render() zet de transform van elk item) en .lineup_card krijgt de opacity (die van het item zet render() ook). */
+      var bar = days.length ? days[0].parentNode : null, pill = null;
+      if (bar) {
+        pill = document.createElement('span');
+        pill.className = 'bgf-day-pill';
+        pill.setAttribute('aria-hidden', 'true');
+        bar.insertBefore(pill, bar.firstChild);
+        bar.setAttribute('data-bgf-day-pill', '');
+      }
+      function movePill(animate) {
+        var on = days.filter(function (b) { return b.getAttribute('aria-pressed') === 'true'; })[0];
+        if (!pill || !on) return;
+        var to = { x: on.offsetLeft, y: on.offsetTop, width: on.offsetWidth, height: on.offsetHeight };
+        if (animate && !reduce.matches) gsap.to(pill, Object.assign({ duration: 0.45, ease: 'power3.out', overwrite: true }, to));
+        else gsap.set(pill, Object.assign({ overwrite: true }, to));
+      }
+      // zichtbare kaarten van links naar rechts op het scherm
+      function visibleCards() {
+        return cards.filter(function (c) { return c.style.visibility !== 'hidden'; }).map(function (c) {
+          return { item: c, face: c.querySelector('.lineup_card') || c, x: c.getBoundingClientRect().left };
+        }).sort(function (a, b) { return a.x - b.x; });
+      }
+      var swap = null;
+      function swapTo(day, dir) {
+        if (swap) swap.kill();
+        gsap.set(cards, { '--bgf-out-x': '0px' });
+        gsap.set(cards.map(function (c) { return c.querySelector('.lineup_card') || c; }), { opacity: 1 });
+        nameOut();
+        var r = parseFloat(getComputedStyle(document.documentElement).fontSize) / k;   // rem in baan-px (de baan schaalt met --k)
+        var lead = function (set) { return dir > 0 ? set : set.slice().reverse(); };   // de kaarten aan de kant waar het heen gaat eerst
+        var out = lead(visibleCards()), slow = reduce.matches;
+        swap = gsap.timeline({ onComplete: function () { swap = null; } })
+          .to(out.map(function (o) { return o.face; }), { opacity: 0, duration: slow ? 0.15 : 0.2, stagger: slow ? 0 : 0.03, ease: 'power2.in' }, 0)
+          .to(out.map(function (o) { return o.item; }), { '--bgf-out-x': (slow ? 0 : -dir * 6 * r) + 'px', duration: 0.2, stagger: slow ? 0 : 0.03, ease: 'power2.in' }, 0)
+          .add(function () {
+            gsap.set(cards, { '--bgf-out-x': '0px' });
+            build(day);
+            var inn = lead(visibleCards());
+            gsap.set(inn.map(function (o) { return o.face; }), { opacity: 0 });
+            swap.fromTo(inn.map(function (o) { return o.item; }), { '--bgf-out-x': (slow ? 0 : dir * 8 * r) + 'px' }, { '--bgf-out-x': '0px', duration: 0.5, stagger: slow ? 0 : 0.08, ease: 'power3.out' }, '>')
+              .to(inn.map(function (o) { return o.face; }), { opacity: 1, duration: slow ? 0.15 : 0.5, stagger: slow ? 0 : 0.08, ease: 'power3.out' }, '<');
+          });
+      }
       days.forEach(function (button) {
         button.setAttribute('aria-pressed', String(button === days[0]));
         button.addEventListener('click', function () {
-          if (button.getAttribute('aria-pressed') === 'true') return;
+          var was = days.filter(function (b) { return b.getAttribute('aria-pressed') === 'true'; })[0];
+          if (button === was) return;
           days.forEach(function (b) { b.setAttribute('aria-pressed', String(b === button)); });
-          var stage = list.parentNode;   // de wrapper van de Collection List: de lijst zelf heeft de schaal (transform) uit site.css
-          gsap.killTweensOf(stage);
-          nameOut();
-          gsap.to(stage, { opacity: 0, y: reduce.matches ? 0 : 24, duration: reduce.matches ? 0.15 : 0.3, ease: 'power2.in', onComplete: function () {
-            build(button.getAttribute('data-bgf-lineup-day'));
-            gsap.to(stage, { opacity: 1, y: 0, duration: reduce.matches ? 0.15 : 0.7, ease: 'power3.out' });
-          } });
+          movePill(true);
+          swapTo(button.getAttribute('data-bgf-lineup-day'), days.indexOf(button) < days.indexOf(was) ? -1 : 1);
         });
       });
+      movePill(false);
 
       // schaal: 1:1 op 1440, breder = de Figma-baan over de hele breedte; telefoons houden de middelste kaart op schermbreedte - 90
       function fit() {
         var vw = document.documentElement.clientWidth, p = cur();
         k = vw > 1440 ? vw / 1440 : Math.max(vw / 1440, Math.min(1, (vw - 90) / 480));
+        if (!(k > 0)) k = 1;   // verborgen frame zonder breedte: geen deling door 0
         section.style.setProperty('--k', k);
         if (info) info.style.maxWidth = (vw / 2 + 216 * k - 16) + 'px';   // het blok begint 216 baan-px links van het midden
-        setPos(p); render(true);
+        setPos(p); render(true); movePill(false);
       }
       window.addEventListener('resize', fit);
       fit();
       document.fonts.ready.then(function () {   // SplitText meet met het echte lettertype
-        build('all');
+        build('all'); movePill(false);
         if (window.ScrollTrigger) window.ScrollTrigger.refresh();   // de sectie is nu anders hoog (pin van de hero)
       });
     }, ['Draggable', 'InertiaPlugin', 'SplitText']);
