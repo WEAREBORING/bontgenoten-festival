@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.13.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.14.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -235,7 +235,7 @@
   if (liveGradient) load(gradientSrc).then(function () {
     each('[data-bgf-gradient]', function (el) {
       var canvas = document.createElement('canvas');
-      var still = el.querySelector('img');
+      var still = el.querySelector(':scope > img');
       el.insertBefore(canvas, still ? still.nextSibling : el.firstChild);
       // smalle band (marquee): de canvas krijgt de verhouding van een scherm (16:9) en de band toont daar een strook uit, zodat het
       // verloop eruitziet als in de hero in plaats van alle kleuren in een paar centimeter; resolutie 1x is daar genoeg;
@@ -244,7 +244,7 @@
       if (band) canvas.setAttribute('data-bgf-crop', '');
       // de hero krijgt LINE-UP een scherm lager in het glas zodra er een line-up-sectie op de pagina staat (zie data-bgf-hero)
       startGradient(el, canvas, el.getAttribute('data-bgf-gradient') || 'bgf-hero', null,
-        { maxDpr: band ? 1 : 2, pointer: !band, below: el.hasAttribute('data-bgf-hero') && document.querySelector('[data-bgf-lineup]') ? 'LINE-UP' : null });
+        { maxDpr: band ? 1 : el.hasAttribute('data-bgf-hero') ? 2 : 1.5, pointer: !band, below: el.hasAttribute('data-bgf-hero') && document.querySelector('[data-bgf-lineup]') ? 'LINE-UP' : null });
     });
 
     /* data-bgf-gradient-text (Section - Gallery, titelregels): de letters gevuld met het live verloop. De canvas ligt in de regel en
@@ -270,7 +270,7 @@
       var canvas = document.createElement('canvas');
       canvas.style.clipPath = 'url(#' + clip.id + ')';
       el.appendChild(canvas);
-      var g = startGradient(el, canvas, el.getAttribute('data-bgf-gradient-text') || 'bgf-glass', function () { el.setAttribute('data-bgf-live', ''); }, { pointer: false });
+      var g = startGradient(el, canvas, el.getAttribute('data-bgf-gradient-text') || 'bgf-glass', function () { el.setAttribute('data-bgf-live', ''); }, { pointer: false, maxDpr: 1 });   // letterranden komen uit de SVG-clip, 1x is scherp genoeg
       var fit = function () {
         var cs = getComputedStyle(el), c = canvas.getBoundingClientRect(), m = marker.getBoundingClientRect();
         t.setAttribute('x', m.left - c.left);
@@ -318,9 +318,7 @@
         // de inhoud in het midden scrolt gewoon weg (1:1 met de pagina, geen fade), ook al staat de hero vast (BORING 2026-11-26)
         gsap.to(hero.querySelectorAll('[data-bgf-hero-out]'), { y: function () { return -hero.offsetHeight; }, ease: 'none',
           scrollTrigger: { trigger: hero, start: 'top top', end: function () { return '+=' + hero.offsetHeight; }, scrub: true, invalidateOnRefresh: true } });
-        // zijteksten mee weg (de hero blijft staan onder de line-up); alleen opacity, ze staan met transform in het midden
-        gsap.fromTo(hero.querySelectorAll('[data-bgf-hero-fade]'), { opacity: 1 }, { opacity: 0, ease: 'none', immediateRender: false,
-          scrollTrigger: { trigger: hero, start: 'top top', end: function () { return '+=' + hero.offsetHeight * 0.4; }, scrub: true } });
+        // de zijteksten blijven staan (designer 2026-11-26)
         var pinLength = function () { return hero.offsetHeight + (lineupSection ? lineupSection.offsetHeight : 0); };
         window.ScrollTrigger.create({ trigger: hero, start: 'top top', end: function () { return '+=' + pinLength(); },
           pin: true, pinSpacing: false, invalidateOnRefresh: true,
@@ -330,26 +328,53 @@
     });
   }, ['ScrollTrigger']);
 
-  /* data-bgf-card (Section - Gallery): sectie-overgang van het bewegende verloop naar creme. Het creme paneel komt als scheve,
-     kleinere kaart omhoog en trekt recht naar volle breedte zodra zijn bovenkant de bovenkant van het scherm bereikt; de hero
-     erachter ([data-bgf-hero], vastgepind) wordt donkerder (niet kleiner). Vanaf 768px, zonder reduced motion.
-     Bij het opnieuw meten (refreshInit) gaat de transform van het paneel eraf, zodat de parallax erin goed meet. */
+  /* data-bgf-card: harde sectie-overgang. De sectie komt als scheve, kleinere kaart omhoog en trekt recht naar volle breedte zodra
+     haar bovenkant de bovenkant van het scherm bereikt. De kanteling wisselt per kaart links/rechts (designer 2026-11-26); naast de
+     kaart zie je zwart (.main-wrapper, site.css). Achter de eerste kaart staat de vastgepinde hero: die wordt donkerder met een zwarte
+     laag (.bgf-dim; goedkoper dan filter: brightness) en tekent niet meer zodra de kaart hem helemaal bedekt.
+     Vanaf 768px, zonder reduced motion. Bij het opnieuw meten (refreshInit) gaat de transform eraf, zodat alles goed meet. */
   if (document.querySelector('[data-bgf-card]') && !reduce.matches) withGsap(function (gsap) {
     gsap.matchMedia().add('(min-width: 768px)', function () {
-      var behind = document.querySelector('[data-bgf-hero]');
+      var hero = document.querySelector('[data-bgf-hero]');
       var panels = [].slice.call(document.querySelectorAll('[data-bgf-card]'));
       var clear = function () { gsap.set(panels, { clearProps: 'transform' }); };
       window.ScrollTrigger.addEventListener('refreshInit', clear);
-      panels.forEach(function (panel) {
-        var range = { trigger: panel, start: 'top bottom', end: 'top top', scrub: true };
-        gsap.fromTo(panel, { scale: 0.8, rotate: -4, transformOrigin: '50% 0%' },
+      var dim = null;
+      if (hero) { dim = document.createElement('div'); dim.className = 'bgf-dim'; dim.setAttribute('aria-hidden', 'true'); hero.appendChild(dim); }
+      panels.forEach(function (panel, i) {
+        // clamp: de laatste sectie (footer) haalt de bovenkant van het scherm niet; dan eindigt de overgang onderaan de pagina
+        var range = { trigger: panel, start: 'top bottom', end: 'clamp(top top)', scrub: true };
+        gsap.fromTo(panel, { scale: 0.8, rotate: i % 2 ? 4 : -4, transformOrigin: '50% 0%' },
           { scale: 1, rotate: 0, ease: 'none', scrollTrigger: range });
-        if (behind) gsap.fromTo(behind, { filter: 'brightness(1)' }, { filter: 'brightness(0.55)', ease: 'none',
-          scrollTrigger: { trigger: panel, start: 'top bottom', end: 'top top', scrub: true } });
+        if (i === 0 && dim) {
+          gsap.fromTo(dim, { opacity: 0 }, { opacity: 0.45, ease: 'none', scrollTrigger: range });
+          window.ScrollTrigger.create({ trigger: panel, start: 'top top',
+            onEnter: function () { if (hero.bgfGradient) hero.bgfGradient.pause(); },
+            onLeaveBack: function () { if (hero.bgfGradient) hero.bgfGradient.play(); } });
+        }
       });
-      return function () { window.ScrollTrigger.removeEventListener('refreshInit', clear); };
+      return function () { window.ScrollTrigger.removeEventListener('refreshInit', clear); if (dim) dim.remove(); };
     });
   }, ['ScrollTrigger']);
+
+  /* data-bgf-scroll-text (Section - Quote): de tekst kleurt woord voor woord in terwijl je scrolt (van 15% naar vol). Vanaf 768px
+     staat de sectie daarbij even vast (pin, één schermhoogte), daaronder loopt het mee met de sectie. Reduced motion: gewone tekst. */
+  if (document.querySelector('[data-bgf-scroll-text]') && !reduce.matches) withGsap(function (gsap) {
+    document.fonts.ready.then(function () {
+      each('[data-bgf-scroll-text]', function (el) {
+        var section = el.closest('section') || el;
+        var words = window.SplitText.create(el, { type: 'words', wordsClass: 'bgf-scroll-word' }).words;
+        gsap.matchMedia().add({ wide: '(min-width: 768px)', narrow: '(max-width: 767px)' }, function (ctx) {
+          var st = ctx.conditions.wide
+            ? { trigger: section, start: 'top top', end: '+=100%', pin: true, pinSpacing: true, scrub: true }   // pinSpacing expliciet: .main-wrapper is flex (dan staat het standaard uit)
+            : { trigger: el, start: 'top 80%', end: 'bottom 45%', scrub: true };
+          gsap.fromTo(words, { opacity: 0.15 }, { opacity: 1, ease: 'none', stagger: 0.1, scrollTrigger: st });
+        });
+        // de pin komt pas na het laden van de fonts: triggers verderop opnieuw meten
+        window.ScrollTrigger.sort(); window.ScrollTrigger.refresh();
+      });
+    });
+  }, ['ScrollTrigger', 'SplitText']);
 
   /* Bunny-videospeler (Section - Video), naar Osmo's "Custom Bunny HLS Player (Basic)" met dezelfde attributen, alleen het deel
      dat we gebruiken: [data-bunny-player-init] met data-player-src (HLS .m3u8 van Bunny Stream) en data-player-autoplay="true"
@@ -391,7 +416,7 @@
         : load('https://cdn.jsdelivr.net/npm/hls.js@1.6.11').then(function () { return window.Hls.isSupported(); }, function () { return false; })
       ).then(function (useHls) {
         if (!useHls) { video.src = src; return; }
-        var hls = new window.Hls({ maxBufferLength: 10 });
+        var hls = new window.Hls({ maxBufferLength: 10, capLevelToPlayerSize: true });
         hls.attachMedia(video);
         hls.on(window.Hls.Events.MEDIA_ATTACHED, function () { hls.loadSource(src); });
       });
@@ -496,16 +521,16 @@
       var P = 2400;   // CSS-perspectief (ook in site.css)
       var GAP = 96;   // extra ruimte per plek (BORING/klant: "meer lucht"), in baan-px
       var FIGMA = [
-        { xo: 1162, ho: 425, xi: 972, hi: 380, opacity: 0.9, blur: 0 },
-        { xo: 1314, ho: 490, xi: 1174, hi: 435, opacity: 0.65, blur: 0 },
-        { xo: 1426, ho: 570, xi: 1326, hi: 500, opacity: 0.4, blur: 0.75 }
+        { xo: 1162, ho: 425, xi: 972, hi: 380, opacity: 1, dim: 0.15 },
+        { xo: 1314, ho: 490, xi: 1174, hi: 435, opacity: 1, dim: 0.3 },
+        { xo: 1426, ho: 570, xi: 1326, hi: 500, opacity: 1, dim: 0.45 }
       ];
-      var right = [{ tx: 0, tz: 0, ry: 0, w: 480, opacity: 1, blur: 0 }];
+      var right = [{ tx: 0, tz: 0, ry: 0, w: 480, opacity: 1, dim: 0 }];
       FIGMA.forEach(function (f) {
         var ko = f.ho / 600, ki = f.hi / 600, zo = P * (1 - 1 / ko), zi = P * (1 - 1 / ki), xo = (f.xo - 720) / ko, xi = (f.xi - 720) / ki;
-        right.push({ tx: (xo + xi) / 2, tz: (zo + zi) / 2, ry: Math.atan2(-(zo - zi), xo - xi) * 180 / Math.PI, w: Math.hypot(xo - xi, zo - zi), opacity: f.opacity, blur: f.blur });
+        right.push({ tx: (xo + xi) / 2, tz: (zo + zi) / 2, ry: Math.atan2(-(zo - zi), xo - xi) * 180 / Math.PI, w: Math.hypot(xo - xi, zo - zi), opacity: f.opacity, dim: f.dim });
       });
-      right.push(Object.assign({}, right[3], { tx: right[3].tx + 90, opacity: 0, blur: 1.5 }));   // plek 4: schuift van de rand en verdwijnt
+      right.push(Object.assign({}, right[3], { tx: right[3].tx + 90, opacity: 0, dim: 0.6 }));   // plek 4: schuift van de rand en verdwijnt
       right.forEach(function (slot, i) { slot.tx += i * GAP; });
       var CYL = {};
       Object.keys(right[0]).forEach(function (key) {
@@ -559,8 +584,9 @@
           st.opacity = op;
           st.clipPath = 'inset(0 ' + Math.max(0, 480 - cr(CYL.w, d)) / 2 + 'px round 16px)';
           st.zIndex = 100 - Math.round(a * 10);
-          var blur = Math.max(0, cr(CYL.blur, d));
-          st.filter = !reduce.matches && blur > 0.05 ? 'blur(' + blur + 'px)' : '';
+          st.setProperty('--bgf-dim', Math.max(0, Math.min(1, cr(CYL.dim, d))).toFixed(3));
+          // de foto schuift binnen de kaart iets tegen de draairichting in (individuele translate: de hover-schaal blijft transform)
+          if (!reduce.matches) st.setProperty('--bgf-shift', (Math.max(-3, Math.min(3, d)) * -2).toFixed(2) + '%');
         });
         var slot = ((Math.round(pos) % n) + n) % n, now = ring[slot];
         if (now !== active && counter) {
@@ -570,7 +596,15 @@
           counter.innerHTML = '<b>' + pad(uniq.indexOf(now) + 1) + '</b> <span>/ ' + pad(uniq.length) + '</span>';
         }
       }
-      gsap.ticker.add(function () { pos = cur(); render(); });
+      // de getekende stand loopt zacht achter de echte aan (gedempt, zoals smooothy); de naam komt zodra de doelkaart bijna in het midden staat
+      var pressed = false;
+      gsap.ticker.add(function (time, deltaMs) {
+        var c = cur(), dt = Math.min(deltaMs, 50) / 1000;
+        pos = reduce.matches ? c : pos + (c - pos) * (1 - Math.exp(-dt * 14));
+        if (Math.abs(c - pos) < 1e-4) pos = c;
+        render();
+        if (!settled && !pressed && Math.abs(pos - target) < 0.35) nameIn(target);
+      });
 
       // ---- naam in het creme blok: tekens komen omhoog (SplitText), blok schuift open ----
       var split = null, nameTl = null, shown = null;
@@ -579,8 +613,8 @@
         if (nameTl) nameTl.kill();
         nameTl = gsap.to(info, { opacity: 0, y: reduce.matches ? 0 : 8, duration: 0.2, ease: 'power2.in' });
       }
-      function nameIn() {
-        var n = cards.length, a = ring[((Math.round(pos) % n) + n) % n];
+      function nameIn(at) {
+        var n = cards.length, p = at === undefined ? Math.round(pos) : at, a = ring[((p % n) + n) % n];
         if (shown === a && gsap.getProperty(info, 'opacity') === 1) return;
         shown = a;
         if (split) { split.revert(); split = null; }
@@ -590,12 +624,12 @@
         split = window.SplitText.create(infoName, { type: 'chars', mask: 'chars' });
         nameTl = gsap.timeline({ defaults: { ease: 'power3.out' } })
           .set(info, { opacity: 1, y: 0 })
-          .fromTo(infoBox, { scaleX: 0 }, { scaleX: 1, duration: 0.55, ease: 'expo.out' })
-          .fromTo(split.chars, { yPercent: 105 }, { yPercent: 0, duration: 0.6, stagger: 0.02 }, 0.1)
-          .fromTo([infoTag, infoGenre], { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.06 }, 0.25);
+          .fromTo(infoBox, { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: 'expo.out' })
+          .fromTo(split.chars, { yPercent: 105 }, { yPercent: 0, duration: 0.5, stagger: 0.012 }, 0.05)
+          .fromTo([infoTag, infoGenre], { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.05 }, 0.15);
       }
       function settle() {
-        pos = cur(); settled = true; tween = null; target = Math.round(pos);
+        settled = true; tween = null; target = Math.round(cur());
         var n = cards.length, slot = ((target % n) + n) % n, hadFocus = false;
         cards.forEach(function (c, i) {
           var face = c.querySelector('.lineup_card') || c;
@@ -609,22 +643,24 @@
         if (hadFocus) face.focus({ preventScroll: true });   // toetsenbord blijft op de kaart in het midden
         var a = ring[slot], uniq = ring.filter(function (x, i) { return ring.indexOf(x) === i; });
         live.textContent = a.name + ', ' + (uniq.indexOf(a) + 1) + ' van ' + uniq.length;
-        render(true); nameIn();
+        render(true); nameIn(target);
       }
       function goTo(t) {
         target = t; settled = false; nameOut();
         if (tween) tween.kill();
         if (reduce.matches) { setPos(t); settle(); return; }
-        tween = gsap.to(proxy, { x: -t * stepPx(), duration: 0.9, ease: 'power3.out', onComplete: function () { drag.update(); settle(); } });
+        tween = gsap.to(proxy, { x: -t * stepPx(), duration: 0.8, ease: 'expo.out', onComplete: function () { drag.update(); settle(); } });
       }
-      function step(dir) { goTo((settled ? Math.round(pos) : target) + dir); }
-      function goToSlot(slot) { var p = Math.round(pos); goTo(p + wrap(slot - p, cards.length)); }
+      function step(dir) { goTo((settled ? Math.round(cur()) : target) + dir); }
+      function goToSlot(slot) { var p = Math.round(cur()); goTo(p + wrap(slot - p, cards.length)); }
 
       var drag = window.Draggable.create(proxy, {
         trigger: list, type: 'x', inertia: !reduce.matches, dragClickables: true, minimumMovement: 6, allowContextMenu: true,
         snap: { x: function (v) { return Math.round(v / stepPx()) * stepPx(); } },
-        onPress: function () { if (tween) tween.kill(); tween = null; },
+        onPress: function () { pressed = true; if (tween) tween.kill(); tween = null; },
+        onRelease: function () { pressed = false; },
         onDragStart: function () { settled = false; nameOut(); },
+        onThrowUpdate: function () { if (this.tween) target = Math.round(-this.endX / stepPx()); },
         onDragEnd: function () { if (reduce.matches) { setPos(Math.round(cur())); settle(); } },
         onThrowComplete: settle,
         onClick: function (e) {
@@ -662,7 +698,7 @@
 
       // schaal: 1:1 op 1440, breder = de Figma-baan over de hele breedte; telefoons houden de middelste kaart op schermbreedte - 90
       function fit() {
-        var vw = document.documentElement.clientWidth, p = pos;
+        var vw = document.documentElement.clientWidth, p = cur();
         k = vw > 1440 ? vw / 1440 : Math.max(vw / 1440, Math.min(1, (vw - 90) / 480));
         section.style.setProperty('--k', k);
         if (info) info.style.maxWidth = (vw / 2 + 216 * k - 16) + 'px';   // het blok begint 216 baan-px links van het midden
@@ -739,7 +775,9 @@
       if (!items.length) return;
       var band = track.closest('[data-bgf-gradient]') || track;
       var period = 40; // seconden per groep bij rust
-      var pos = 0, speed = 1, dir = 1, boost = 0, shift = 0, lastY = window.scrollY, visible = true;
+      var pos = 0, speed = 1, dir = 1, boost = 0, shift = 0, lastY = window.scrollY, visible = true, itemW = 0, canvasW = 0;
+      var measure = function () { var c = band.querySelector('canvas.bgf-gradient'); itemW = items[0].offsetWidth; canvasW = c ? c.clientWidth : 0; };
+      measure(); window.addEventListener('resize', measure);
       new IntersectionObserver(function (entries) { visible = entries[0].isIntersecting; }).observe(track);
       gsap.ticker.add(function (time, deltaMs) {
         var dt = Math.min(deltaMs, 100) / 1000;
@@ -752,10 +790,11 @@
         var step = speed * dt / period;
         pos = ((pos + step) % 1 + 1) % 1;
         gsap.set(items, { xPercent: -pos * 100, force3D: true });
-        var g = band.bgfGradient, canvas = g && band.querySelector('canvas.bgf-gradient');
-        if (canvas) {
+        var g = band.bgfGradient;
+        if (g && !canvasW) measure();   // de canvas komt pas na het laden van gradient.js
+        if (g && canvasW) {
           var strips = (g.state.stripsMin + g.state.stripsMax) / 2;
-          shift += step * items[0].offsetWidth * 0.35 / (canvas.clientWidth / strips);
+          shift += step * itemW * 0.35 / (canvasW / strips);
           g.setStripShift(shift);
         }
       });
@@ -879,6 +918,15 @@
       var trigger = item.querySelector('[data-bgf-accordion-trigger]');
       var panel = item.querySelector('[data-bgf-accordion-panel]');
       if (!trigger || !panel) return null;
+      // antwoord = de vraag (huisregels bij Celebrate safe): een uitspraak, geen knop en geen plusje (data-bgf-statement, site.css)
+      var norm = function (el) { return el.textContent.replace(/\s+/g, ' ').trim().toLowerCase(); };
+      if (norm(panel) === norm(trigger)) {
+        item.setAttribute('data-bgf-statement', '');
+        trigger.disabled = true;
+        trigger.removeAttribute('aria-expanded');
+        panel.hidden = true;
+        return null;
+      }
       panel.id = 'bgf-accordion-' + n + '-' + i;
       trigger.setAttribute('aria-controls', panel.id);
       return { trigger: trigger, panel: panel };
@@ -891,7 +939,7 @@
       });
     };
     parts.forEach(function (p) { p.trigger.addEventListener('click', function () { open(p); }); });
-    open(parts[0]);
+    if (parts.length) open(parts[0]);
     list.setAttribute('data-bgf-ready', '');
     // pas na de eerste paint animeren, anders klappen alle antwoorden zichtbaar dicht bij het laden
     requestAnimationFrame(function () { requestAnimationFrame(function () { list.setAttribute('data-bgf-animate', ''); }); });

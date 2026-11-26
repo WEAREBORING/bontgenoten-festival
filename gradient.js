@@ -389,7 +389,7 @@ const OVERSCAN_SRC = 0.3;    // extra marge in de bron (tekst mag buiten beeld v
 class Engine {
   constructor(canvas){
     this.canvas = canvas;
-    const gl = canvas.getContext('webgl2', { alpha:true, premultipliedAlpha:false, preserveDrawingBuffer:true, antialias:false });
+    const gl = canvas.getContext('webgl2', { alpha:true, premultipliedAlpha:false, preserveDrawingBuffer:false, antialias:false });
     if (!gl) throw new Error('webgl2');
     this.gl = gl;
     this.floatOK = !!gl.getExtension('EXT_color_buffer_float');
@@ -646,6 +646,7 @@ function create(canvas, options){
       bx = Object.assign(bx || {}, { srcCY:sheet.srcCY, srcHY:sheet.srcHY, offY:clamp(sp.sc.x, 0, 1)*sheet.step }); }
     return { bx, moving };
   }
+  let lastDraw = 0; // BORING: rest = max ~30 fps (perf audit 2026-11-26)
   function tick(now){
     raf = 0; if (dead || document.hidden) return; // BORING: no rendering in a hidden tab
     const dt = last ? Math.min(.1, (now - last)/1000) : 1/60; last = now;
@@ -653,7 +654,7 @@ function create(canvas, options){
     if (srcDirty && !srcBusy) rebuildSource();
     if (liveMask && maskDirty && view.srcReady){ view.setSource(liveMask); maskDirty = false; dirty = true; } // BORING
     const ix = interact(dt); if (ix.moving) dirty = true;
-    if (dirty && view.srcReady){ const F = Math.max(1, Math.round(state.loopSec * state.fps)); const fi = Math.floor(tNow*F) % F;
+    if (dirty && view.srcReady && (ix.moving || !shown || now - lastDraw >= 33)){ lastDraw = now; const F = Math.max(1, Math.round(state.loopSec * state.fps)); const fi = Math.floor(tNow*F) % F;
       const gs = Math.sqrt(Math.min(1, Math.min(view.W, view.H)/1080)); // tool: grain scaled to the 16:9 export (short side 1080)
       view.render(ix.bx ? Object.assign({}, state, { boring:ix.bx }) : state, tNow, fi, false, gs); dirty = false;
       if (!shown){ shown = true; canvas.dispatchEvent(new Event('bgf:rendered')); } }
