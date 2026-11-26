@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.10.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.11.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -412,6 +412,7 @@
         toggle.setAttribute('aria-label', text);
         toggle.setAttribute('data-bgf-cursor-label', text);
         if (autoplay) toggle.setAttribute('aria-pressed', String(!video.muted));
+        if (autoplay) toggle.setAttribute('data-bgf-cursor-icon', video.muted ? 'mute' : 'sound');   // cursor: kruis of equalizer
         else toggle.removeAttribute('aria-pressed');   // zonder autoplay is het een afspeelknop
       }
       if (hint) hint.textContent = text;
@@ -733,11 +734,17 @@
      standaard 26 px, hover 40 px (links, knoppen, [data-bgf-cursor-hover]), ingedrukt 20 px, slepen 80 x 40 ([data-bgf-cursor-drag]).
      [data-bgf-cursor-label="tekst"]: hover-stand met de tekst naast de ovalen (Section - Video: "Geluid aan" / "Geluid uit"; de
      module van het element mag de tekst wisselen, de cursor leest hem bij elke beweging en klik opnieuw).
+     [data-bgf-cursor-icon]: de ovalen vormen een teken, ook bij elke beweging en klik opnieuw gelezen (Section - Video):
+     "mute" = dunne ovalen 45 graden gedraaid tot een kruis (geluid uit), "sound" = twee staande ovalen naast elkaar die op en neer
+     gaan als een equalizer (geluid aan).
      De css staat in site.css (.bgf-cursor, .bgf-cursor-label). */
   var fine = window.matchMedia('(hover: hover) and (pointer: fine)');
   if (document.querySelector('[data-bgf-cursor]') && fine.matches && !reduce.matches) withGsap(function (gsap) {
     // [breedte, hoogte] van het liggende ovaal; het staande ovaal is gespiegeld, behalve bij slepen
-    var sizes = { base: [26, 14, 14, 26], hover: [40, 18, 18, 40], press: [20, 10, 10, 20], drag: [80, 24, 24, 40] };
+    var sizes = { base: [26, 14, 14, 26], hover: [40, 18, 18, 40], press: [20, 10, 10, 20], drag: [80, 24, 24, 40],
+      mute: [30, 7, 7, 30], sound: [9, 26, 9, 26] };
+    // per stand: draaiing en zijwaartse verschuiving (px) van het liggende en het staande ovaal; overal elders 0
+    var poses = { mute: { rotation: 45, left: [0, 0] }, sound: { rotation: 0, left: [-6, 6] } };
     var ovals = ['is-horizontal', 'is-vertical'].map(function (mod) {
       var o = document.createElement('span');
       o.className = 'bgf-cursor ' + mod;
@@ -757,19 +764,26 @@
     var labelled = null;
     function setLabel() {
       var text = labelled ? labelled.getAttribute('data-bgf-cursor-label') : '';
+      icon = labelled && labelled.getAttribute('data-bgf-cursor-icon') || '';
       if (label.textContent !== text) label.textContent = text;
       label.style.visibility = text ? '' : 'hidden';
     }
     var moveX = ovals.map(function (o) { return gsap.quickSetter(o, 'x', 'px'); });
     var moveY = ovals.map(function (o) { return gsap.quickSetter(o, 'y', 'px'); });
-    var current = '', hovering = false, pressed = false, dragging = false;
+    var current = '', hovering = false, pressed = false, dragging = false, icon = '', bounce = null;
     function setState() {
-      var next = dragging ? 'drag' : pressed ? 'press' : hovering ? 'hover' : 'base';
+      var next = dragging ? 'drag' : pressed && !icon ? 'press' : icon || (hovering ? 'hover' : 'base');
       if (next === current) return;
       current = next;
-      var d = sizes[next];
-      gsap.to(ovals[0], { width: d[0], height: d[1], duration: 0.3, ease: 'power3.out', overwrite: 'auto' });
-      gsap.to(ovals[1], { width: d[2], height: d[3], duration: 0.3, ease: 'power3.out', overwrite: 'auto' });
+      var d = sizes[next], pose = poses[next] || { rotation: 0, left: [0, 0] };
+      [0, 1].forEach(function (i) {
+        gsap.to(ovals[i], { width: d[i * 2], height: d[i * 2 + 1], rotation: pose.rotation, left: pose.left[i], duration: 0.35, ease: 'power3.out', overwrite: 'auto' });
+      });
+      // equalizer: de twee staande ovalen gaan om de beurt op en neer zolang het geluid aan staat
+      if (bounce) { bounce.kill(); bounce = null; gsap.to(ovals.slice(0, 2), { scaleY: 1, duration: 0.2 }); }
+      if (next === 'sound') bounce = gsap.timeline({ repeat: -1 })
+        .to(ovals[0], { scaleY: 0.45, duration: 0.32, ease: 'sine.inOut', yoyo: true, repeat: 1 }, 0)
+        .to(ovals[1], { scaleY: 0.45, duration: 0.24, ease: 'sine.inOut', yoyo: true, repeat: 3 }, 0.08);
     }
     setState();
     var hoverSel = 'a, button, [role="button"], input[type="submit"], label, select, [data-bgf-cursor-hover]';
@@ -777,18 +791,24 @@
       moveX.forEach(function (f) { f(e.clientX); });
       moveY.forEach(function (f) { f(e.clientY); });
       gsap.to(ovals, { opacity: 1, duration: 0.2, overwrite: 'auto' });
-      var t = e.target instanceof Element ? e.target : null;
+      lastX = e.clientX; lastY = e.clientY;
+      under(e.target instanceof Element ? e.target : null);
+    });
+    // bij scrollen zonder muisbeweging schuift er iets anders onder de cursor: opnieuw kijken wat er onder de muis ligt
+    var lastX = -1, lastY = -1;
+    window.addEventListener('scroll', function () { if (lastX >= 0) under(document.elementFromPoint(lastX, lastY)); }, { passive: true });
+    function under(t) {
       labelled = t && t.closest('[data-bgf-cursor-label]');
       hovering = !!(t && (labelled || t.closest(hoverSel)));
       setLabel();
       setState();
-    });
+    }
     document.addEventListener('mousedown', function (e) {
       pressed = true;
       dragging = !!(e.target instanceof Element && e.target.closest('[data-bgf-cursor-drag]'));
       setState();
     });
-    document.addEventListener('mouseup', function () { pressed = false; dragging = false; setState(); setTimeout(setLabel); });   // na de klik: nieuwe tekst
+    document.addEventListener('mouseup', function () { pressed = false; dragging = false; setState(); setTimeout(function () { setLabel(); setState(); }); });   // na de klik: nieuwe tekst en teken
     document.documentElement.addEventListener('mouseleave', function () { gsap.to(ovals, { opacity: 0, duration: 0.2, overwrite: 'auto' }); });
   });
 
