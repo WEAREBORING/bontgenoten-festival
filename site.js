@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.15.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.15.1: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -658,7 +658,7 @@
         infoName.textContent = a.name; infoTag.textContent = a.tag ? '(' + a.tag + ')' : ''; infoGenre.textContent = a.genre;
         if (nameTl) nameTl.kill();
         if (reduce.matches) { nameTl = gsap.fromTo(info, { opacity: 0 }, { opacity: 1, y: 0, duration: 0.3 }); return; }
-        split = window.SplitText.create(infoName, { type: 'chars', mask: 'chars' });
+        split = window.SplitText.create(infoName, { type: 'words,chars', mask: 'chars' });   // words: een lange naam breekt tussen woorden, niet midden in een woord
         nameTl = gsap.timeline({ defaults: { ease: 'power3.out' } })
           .set(info, { opacity: 1, y: 0 })
           .fromTo(infoBox, { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: 'expo.out' })
