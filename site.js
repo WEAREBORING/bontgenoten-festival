@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.12.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.13.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -455,49 +455,226 @@
     });
   }, ['ScrollTrigger']);
 
-  /* data-bgf-lineup (line-up, basis tot het slider-prototype gekozen is): dagfilter ([data-bgf-lineup-day] = all, zaterdag of
-     zondag; de kaarten hebben data-bgf-lineup-item = de Dag uit het CMS), pijltjes schuiven één kaart, teller "01 / 12".
-     De rij zelf is een gewone horizontale scroll met snap (sleep, trackpad, swipe). */
+  /* data-bgf-lineup (Section Line-up, optie 2 "cilinder", Figma 642:1806 met meer lucht; gekozen door de klant 2026-11-26).
+     De kaarten zijn de items van de Collection List (CMS Line-up): [data-bgf-lineup-item] = Dag, met daarin [data-bgf-lineup-name],
+     [data-bgf-lineup-tag] (Toevoeging) en [data-bgf-lineup-genre]. Zonder site.js blijft het de gewone scrollrij uit Webflow.
+     Met site.js: een vaste baan van 1440 x 680 die meeschaalt (--k), elke kaart op een plek van de cilinder; tussen de plekken
+     loopt alles vloeiend (Catmull-Rom). Slepen (met inertie), pijltjes, toetsen en klikken op een zijkaart draaien de cilinder;
+     hij loopt rond (korte lijsten worden herhaald tot er minstens 10 kaarten zijn). De naam van de artiest in het midden staat in
+     [data-bgf-lineup-info] (creme blok met naam, toevoeging en genre). Dagknoppen [data-bgf-lineup-day] filteren.
+     Reduced motion: geen inertie en geen animaties, wel alles bedienbaar. De maten staan in site.css ([data-bgf-lineup-ready]). */
   each('[data-bgf-lineup]', function (section) {
-    var list = section.querySelector('[data-bgf-lineup-slider] [role="list"], [data-bgf-lineup-slider] .w-dyn-items');
-    var items = [].slice.call(section.querySelectorAll('[data-bgf-lineup-item]'));
-    var days = [].slice.call(section.querySelectorAll('[data-bgf-lineup-day]'));
-    var counter = section.querySelector('[data-bgf-lineup-counter]');
-    var visible = function () { return items.filter(function (i) { return !i.hidden; }); };
-    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-    var current = function () {
-      if (!list) return 0;
-      var mid = list.getBoundingClientRect().left + list.clientWidth / 2, best = 0, dist = Infinity;
-      visible().forEach(function (item, i) {
-        var r = item.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - mid);
-        if (d < dist) { dist = d; best = i; }
+    var slider = section.querySelector('[data-bgf-lineup-slider]');
+    var list = slider && slider.querySelector('.w-dyn-items');
+    var sources = list ? [].slice.call(list.querySelectorAll('[data-bgf-lineup-item]')) : [];
+    if (!sources.length) return;   // lege collectie: de lege staat van Webflow blijft
+    withGsap(function (gsap) {
+      var txt = function (el, sel) { var n = el.querySelector(sel); return n ? n.textContent.trim() : ''; };
+      var artists = sources.map(function (item) {
+        return { node: item, name: txt(item, '[data-bgf-lineup-name]'), tag: txt(item, '[data-bgf-lineup-tag]'),
+          genre: txt(item, '[data-bgf-lineup-genre]'), day: (item.getAttribute('data-bgf-lineup-item') || '').toLowerCase() };
       });
-      return best;
-    };
-    var count = function () {
-      var n = visible().length;
-      if (counter) counter.textContent = n ? pad(current() + 1) + ' / ' + pad(n) : '';
-    };
-    var go = function (step) {
-      var v = visible(), i = Math.max(0, Math.min(v.length - 1, current() + step));
-      if (v[i]) v[i].scrollIntoView({ behavior: reduce.matches ? 'auto' : 'smooth', block: 'nearest', inline: 'center' });
-    };
-    days.forEach(function (button) {
-      button.addEventListener('click', function () {
-        var day = button.getAttribute('data-bgf-lineup-day');
-        days.forEach(function (b) { b.setAttribute('aria-pressed', b === button); });
-        items.forEach(function (item) { item.hidden = day !== 'all' && (item.getAttribute('data-bgf-lineup-item') || '').toLowerCase() !== day; });
-        if (list) list.scrollLeft = 0;
-        count();
+      var info = section.querySelector('[data-bgf-lineup-info]');
+      var infoBox = section.querySelector('[data-bgf-lineup-info-box]');
+      var infoName = section.querySelector('[data-bgf-lineup-info-name]');
+      var infoTag = section.querySelector('[data-bgf-lineup-info-tag]');
+      var infoGenre = section.querySelector('[data-bgf-lineup-info-genre]');
+      var counter = section.querySelector('[data-bgf-lineup-counter]');
+      var days = [].slice.call(section.querySelectorAll('[data-bgf-lineup-day]'));
+      var live = document.createElement('p');
+      live.className = 'bgf-sr';
+      live.setAttribute('aria-live', 'polite');
+      slider.appendChild(live);
+      if (counter) { counter.removeAttribute('aria-live'); counter.setAttribute('aria-hidden', 'true'); }
+      slider.setAttribute('role', 'region');
+      slider.setAttribute('aria-roledescription', 'carrousel');
+      slider.setAttribute('aria-label', 'Line-up');
+      list.setAttribute('data-bgf-cursor-drag', '');
+      section.setAttribute('data-bgf-lineup-ready', '');
+
+      // ---- cilinder: elke plek opgelost uit de Figma-trapezia (buiten- en binnenrand: x en hoogte; horizon op het kaartmidden) ----
+      var P = 2400;   // CSS-perspectief (ook in site.css)
+      var GAP = 96;   // extra ruimte per plek (BORING/klant: "meer lucht"), in baan-px
+      var FIGMA = [
+        { xo: 1162, ho: 425, xi: 972, hi: 380, opacity: 0.9, blur: 0 },
+        { xo: 1314, ho: 490, xi: 1174, hi: 435, opacity: 0.65, blur: 0 },
+        { xo: 1426, ho: 570, xi: 1326, hi: 500, opacity: 0.4, blur: 0.75 }
+      ];
+      var right = [{ tx: 0, tz: 0, ry: 0, w: 480, opacity: 1, blur: 0 }];
+      FIGMA.forEach(function (f) {
+        var ko = f.ho / 600, ki = f.hi / 600, zo = P * (1 - 1 / ko), zi = P * (1 - 1 / ki), xo = (f.xo - 720) / ko, xi = (f.xi - 720) / ki;
+        right.push({ tx: (xo + xi) / 2, tz: (zo + zi) / 2, ry: Math.atan2(-(zo - zi), xo - xi) * 180 / Math.PI, w: Math.hypot(xo - xi, zo - zi), opacity: f.opacity, blur: f.blur });
       });
-    });
-    if (days[0]) days[0].setAttribute('aria-pressed', 'true');
-    days.slice(1).forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
-    var prev = section.querySelector('[data-bgf-lineup-prev]'), next = section.querySelector('[data-bgf-lineup-next]');
-    if (prev) prev.addEventListener('click', function () { go(-1); });
-    if (next) next.addEventListener('click', function () { go(1); });
-    if (list) list.addEventListener('scroll', function () { window.requestAnimationFrame(count); }, { passive: true });
-    count();
+      right.push(Object.assign({}, right[3], { tx: right[3].tx + 90, opacity: 0, blur: 1.5 }));   // plek 4: schuift van de rand en verdwijnt
+      right.forEach(function (slot, i) { slot.tx += i * GAP; });
+      var CYL = {};
+      Object.keys(right[0]).forEach(function (key) {
+        var odd = key === 'tx' || key === 'ry';
+        CYL[key] = [4, 3, 2, 1].map(function (i) { return odd ? -right[i][key] : right[i][key]; }).concat(right.map(function (r) { return r[key]; }));
+      });
+      // Catmull-Rom door de plekwaarden op een gebroken plek d (-4..4); daarbuiten de rand
+      function cr(v, d) {
+        var x = Math.max(0, Math.min(8, d + 4)), i = Math.min(7, Math.floor(x)), u = x - i;
+        var p0 = v[Math.max(0, i - 1)], p1 = v[i], p2 = v[i + 1], p3 = v[Math.min(8, i + 2)];
+        return 0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u + (3 * p1 - p0 - 3 * p2 + p3) * u * u * u);
+      }
+      var stepTrack = CYL.tx[5] * P / (P - CYL.tz[5]);   // baan-px van het midden tot plek 1
+
+      // ---- ring: de kaarten van de gekozen dag, herhaald tot minstens 10 (kopieën zijn verborgen voor schermlezers) ----
+      var ring = [], cards = [], pos = 0, lastPos = NaN, active = -1, tween = null, target = 0, settled = true, k = 1;
+      var wrap = function (d, n) { return ((d % n) + n + n / 2) % n - n / 2; };
+      var stepPx = function () { return stepTrack * k; };
+      var proxy = document.createElement('div');
+      var cur = function () { return -gsap.getProperty(proxy, 'x') / stepPx(); };
+      function build(day) {
+        cards.forEach(function (c) { if (c.hasAttribute('data-bgf-lineup-clone')) c.remove(); });
+        var pick = artists.filter(function (a) { return day === 'all' || a.day === day; });
+        artists.forEach(function (a) { a.node.hidden = pick.indexOf(a) < 0; if (a.node.hidden) a.node.removeAttribute('data-bgf-slot'); });
+        ring = []; cards = [];
+        while (ring.length < 10) pick.forEach(function (a) { ring.push(a); });
+        ring.forEach(function (a, slot) {
+          var card = cards.indexOf(a.node) < 0 ? a.node : a.node.cloneNode(true);
+          if (card !== a.node) { card.setAttribute('data-bgf-lineup-clone', ''); list.appendChild(card); }
+          card.setAttribute('data-bgf-slot', slot);
+          var face = card.querySelector('.lineup_card') || card;
+          face.setAttribute('role', 'button');
+          face.setAttribute('tabindex', '-1');
+          face.setAttribute('aria-label', a.name + (a.tag ? ' (' + a.tag + ')' : '') + (a.genre ? ', ' + a.genre : ''));
+          var img = card.querySelector('img');
+          if (img) { img.setAttribute('draggable', 'false'); img.loading = 'eager'; if (img.decode) img.decode().catch(function () {}); }
+          cards.push(card);
+        });
+        setPos(0); target = 0; active = -1; lastPos = NaN; settle();
+      }
+      function setPos(p) { pos = p; gsap.set(proxy, { x: -p * stepPx() }); if (drag) drag.update(); }
+      function render(force) {
+        if (!force && Math.abs(pos - lastPos) < 1e-4) return;
+        lastPos = pos;
+        var n = cards.length;
+        cards.forEach(function (c, i) {
+          var d = wrap(i - pos, n), a = Math.abs(d), op = Math.max(0, Math.min(1, cr(CYL.opacity, d))), st = c.style;
+          st.visibility = op <= 0 ? 'hidden' : '';
+          if (op <= 0) return;
+          st.transform = 'translate3d(' + cr(CYL.tx, d) + 'px, 0, ' + cr(CYL.tz, d) + 'px) rotateY(' + cr(CYL.ry, d) + 'deg)';
+          st.opacity = op;
+          st.clipPath = 'inset(0 ' + Math.max(0, 480 - cr(CYL.w, d)) / 2 + 'px round 16px)';
+          st.zIndex = 100 - Math.round(a * 10);
+          var blur = Math.max(0, cr(CYL.blur, d));
+          st.filter = !reduce.matches && blur > 0.05 ? 'blur(' + blur + 'px)' : '';
+        });
+        var slot = ((Math.round(pos) % n) + n) % n, now = ring[slot];
+        if (now !== active && counter) {
+          active = now;
+          var uniq = ring.filter(function (x, i) { return ring.indexOf(x) === i; });
+          var pad = function (v) { return (v < 10 ? '0' : '') + v; };
+          counter.innerHTML = '<b>' + pad(uniq.indexOf(now) + 1) + '</b> <span>/ ' + pad(uniq.length) + '</span>';
+        }
+      }
+      gsap.ticker.add(function () { pos = cur(); render(); });
+
+      // ---- naam in het creme blok: tekens komen omhoog (SplitText), blok schuift open ----
+      var split = null, nameTl = null, shown = null;
+      function nameOut() {
+        if (!shown) return; shown = null;
+        if (nameTl) nameTl.kill();
+        nameTl = gsap.to(info, { opacity: 0, y: reduce.matches ? 0 : 8, duration: 0.2, ease: 'power2.in' });
+      }
+      function nameIn() {
+        var n = cards.length, a = ring[((Math.round(pos) % n) + n) % n];
+        if (shown === a && gsap.getProperty(info, 'opacity') === 1) return;
+        shown = a;
+        if (split) { split.revert(); split = null; }
+        infoName.textContent = a.name; infoTag.textContent = a.tag ? '(' + a.tag + ')' : ''; infoGenre.textContent = a.genre;
+        if (nameTl) nameTl.kill();
+        if (reduce.matches) { nameTl = gsap.fromTo(info, { opacity: 0 }, { opacity: 1, y: 0, duration: 0.3 }); return; }
+        split = window.SplitText.create(infoName, { type: 'chars', mask: 'chars' });
+        nameTl = gsap.timeline({ defaults: { ease: 'power3.out' } })
+          .set(info, { opacity: 1, y: 0 })
+          .fromTo(infoBox, { scaleX: 0 }, { scaleX: 1, duration: 0.55, ease: 'expo.out' })
+          .fromTo(split.chars, { yPercent: 105 }, { yPercent: 0, duration: 0.6, stagger: 0.02 }, 0.1)
+          .fromTo([infoTag, infoGenre], { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.06 }, 0.25);
+      }
+      function settle() {
+        pos = cur(); settled = true; tween = null; target = Math.round(pos);
+        var n = cards.length, slot = ((target % n) + n) % n, hadFocus = false;
+        cards.forEach(function (c, i) {
+          var face = c.querySelector('.lineup_card') || c;
+          if (face === document.activeElement) hadFocus = true;
+          face.setAttribute('tabindex', i === slot ? '0' : '-1');
+          c.toggleAttribute('data-bgf-active', i === slot);
+          // kopieën zijn onzichtbaar voor schermlezers, behalve als ze in het midden staan
+          if (c.hasAttribute('data-bgf-lineup-clone')) c.setAttribute('aria-hidden', String(i !== slot));
+        });
+        var face = cards[slot].querySelector('.lineup_card') || cards[slot];
+        if (hadFocus) face.focus({ preventScroll: true });   // toetsenbord blijft op de kaart in het midden
+        var a = ring[slot], uniq = ring.filter(function (x, i) { return ring.indexOf(x) === i; });
+        live.textContent = a.name + ', ' + (uniq.indexOf(a) + 1) + ' van ' + uniq.length;
+        render(true); nameIn();
+      }
+      function goTo(t) {
+        target = t; settled = false; nameOut();
+        if (tween) tween.kill();
+        if (reduce.matches) { setPos(t); settle(); return; }
+        tween = gsap.to(proxy, { x: -t * stepPx(), duration: 0.9, ease: 'power3.out', onComplete: function () { drag.update(); settle(); } });
+      }
+      function step(dir) { goTo((settled ? Math.round(pos) : target) + dir); }
+      function goToSlot(slot) { var p = Math.round(pos); goTo(p + wrap(slot - p, cards.length)); }
+
+      var drag = window.Draggable.create(proxy, {
+        trigger: list, type: 'x', inertia: !reduce.matches, dragClickables: true, minimumMovement: 6, allowContextMenu: true,
+        snap: { x: function (v) { return Math.round(v / stepPx()) * stepPx(); } },
+        onPress: function () { if (tween) tween.kill(); tween = null; },
+        onDragStart: function () { settled = false; nameOut(); },
+        onDragEnd: function () { if (reduce.matches) { setPos(Math.round(cur())); settle(); } },
+        onThrowComplete: settle,
+        onClick: function (e) {
+          var c = e.target.closest && e.target.closest('[data-bgf-slot]');
+          if (c && !c.hasAttribute('data-bgf-active')) goToSlot(+c.getAttribute('data-bgf-slot'));
+        }
+      })[0];
+
+      var prev = section.querySelector('[data-bgf-lineup-prev]'), next = section.querySelector('[data-bgf-lineup-next]');
+      if (prev) prev.addEventListener('click', function () { step(-1); });
+      if (next) next.addEventListener('click', function () { step(1); });
+      slider.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+        else if ((e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('[data-bgf-slot]') && !e.target.closest('[data-bgf-active]')) {
+          e.preventDefault(); goToSlot(+e.target.closest('[data-bgf-slot]').getAttribute('data-bgf-slot'));
+        }
+      });
+
+      // dagknoppen: baan weg, lijst wisselen, baan terug
+      days.forEach(function (button) {
+        button.setAttribute('aria-pressed', String(button === days[0]));
+        button.addEventListener('click', function () {
+          if (button.getAttribute('aria-pressed') === 'true') return;
+          days.forEach(function (b) { b.setAttribute('aria-pressed', String(b === button)); });
+          var stage = list.parentNode;   // de wrapper van de Collection List: de lijst zelf heeft de schaal (transform) uit site.css
+          gsap.killTweensOf(stage);
+          nameOut();
+          gsap.to(stage, { opacity: 0, y: reduce.matches ? 0 : 24, duration: reduce.matches ? 0.15 : 0.3, ease: 'power2.in', onComplete: function () {
+            build(button.getAttribute('data-bgf-lineup-day'));
+            gsap.to(stage, { opacity: 1, y: 0, duration: reduce.matches ? 0.15 : 0.7, ease: 'power3.out' });
+          } });
+        });
+      });
+
+      // schaal: 1:1 op 1440, breder = de Figma-baan over de hele breedte; telefoons houden de middelste kaart op schermbreedte - 90
+      function fit() {
+        var vw = document.documentElement.clientWidth, p = pos;
+        k = vw > 1440 ? vw / 1440 : Math.max(vw / 1440, Math.min(1, (vw - 90) / 480));
+        section.style.setProperty('--k', k);
+        if (info) info.style.maxWidth = (vw / 2 + 216 * k - 16) + 'px';   // het blok begint 216 baan-px links van het midden
+        setPos(p); render(true);
+      }
+      window.addEventListener('resize', fit);
+      fit();
+      document.fonts.ready.then(function () {   // SplitText meet met het echte lettertype
+        build('all');
+        if (window.ScrollTrigger) window.ScrollTrigger.refresh();   // de sectie is nu anders hoog (pin van de hero)
+      });
+    }, ['Draggable', 'InertiaPlugin', 'SplitText']);
   });
 
   /* Footer-CTA (.cta_wrapper): [cta-top|right|bottom|left] schuiven naar binnen. Beginstand staat in de head van de pagina. */

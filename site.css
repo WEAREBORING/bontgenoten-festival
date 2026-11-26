@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.css v1.12.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
+/* Bontgenoten Festival site.css v1.13.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
 
 /* Vloeiende root-fontgrootte: 1rem = 16px op het ontwerpformaat (1440 x 900) en daaronder. Groter alleen als het scherm
    zowel breder als hoger is, tot 18px; zo past een sectie ook op een breed maar laag scherm.
@@ -80,7 +80,10 @@ html.bgf-nav-open { overflow: hidden; }
 [data-bgf-gradient-text][data-bgf-live] { background-image: none !important; -webkit-text-fill-color: transparent; }
 [data-bgf-baseline] { display: inline-block; width: 0; height: 0; vertical-align: baseline; }
 
-/* data-bgf-lineup (basis): de gekozen dag is gevuld, de rij heeft geen zichtbare scrollbalk */
+/* Alleen voor schermlezers (site.js maakt zulke teksten, zoals de aankondiging van de line-up) */
+.bgf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
+
+/* data-bgf-lineup: de gekozen dag is gevuld, de rij heeft geen zichtbare scrollbalk (zonder site.js: gewone scrollrij) */
 [data-bgf-lineup-day][aria-pressed="true"] { background-color: var(--_theme---action--contrast); color: var(--_theme---action--primary); }
 [data-bgf-lineup-slider] .w-dyn-items { scrollbar-width: none; }
 [data-bgf-lineup-slider] .w-dyn-items::-webkit-scrollbar { display: none; }
@@ -92,4 +95,27 @@ html.bgf-nav-open { overflow: hidden; }
 [data-bunny-player-init][data-player-activated="true"] .video_poster { opacity: 0; visibility: hidden; }
 html.bgf-cursor-on .video_hint { display: none; }
 .video_toggle:focus-visible { outline-offset: -0.5rem; }
+
+/* data-bgf-lineup, cilinder (site.js zet data-bgf-lineup-ready en --k). Maten in baan-px van het Figma-frame (1440 x 680, kaart
+   480 x 600, midden op 720 / 300), de hele baan schaalt met --k. De slider loopt van rand tot rand (buiten de container). */
+[data-bgf-lineup-ready] { overflow-x: clip; }
+[data-bgf-lineup-ready] .lineup_slider { position: relative; width: 100vw; max-width: none; margin: 4rem calc(50% - 50vw) 2rem; height: calc(680px * var(--k, 1)); }
+[data-bgf-lineup-ready] .lineup_list { position: absolute; left: 50%; top: 0; width: 1440px; height: 680px; margin-left: -720px; padding: 0; display: block;
+  overflow: visible; scroll-snap-type: none; transform: scale(var(--k, 1)); transform-origin: 50% 0; perspective: 2400px; perspective-origin: 720px 300px;
+  cursor: grab; user-select: none; -webkit-user-select: none; touch-action: pan-y; }
+[data-bgf-lineup-ready] .lineup_item { position: absolute; left: 480px; top: 0; width: 480px; height: 600px; will-change: transform; backface-visibility: hidden; }
+[data-bgf-lineup-ready] .lineup_card { display: block; width: 100%; height: 100%; border-radius: 16px; overflow: hidden; background-color: #1a1a1a; -webkit-tap-highlight-color: transparent; }
+[data-bgf-lineup-ready] .lineup_card:focus-visible { outline-offset: -4px; }
+[data-bgf-lineup-ready] .lineup_image { width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; pointer-events: none; transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+[data-bgf-lineup-ready] .lineup_name, [data-bgf-lineup-ready] .lineup_tag, [data-bgf-lineup-ready] .lineup_meta { display: none; }
+[data-bgf-lineup-ready] .lineup_counter span { opacity: 0.6; font-weight: 500; }   /* "01 / 08": het totaal gedimd */
+[data-bgf-lineup-ready] .lineup_info { display: flex; position: absolute; z-index: 200; left: calc(50% - 216px * var(--k, 1)); top: calc(556px * var(--k, 1)); pointer-events: none; }
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  [data-bgf-lineup-ready] .lineup_item:not([data-bgf-active]):hover .lineup_image { transform: scale(1.06); }
+}
+/* Achter de line-up staat het vastgepinde hero-verloop alleen vanaf 992px met muis en zonder reduced motion (data-bgf-hero).
+   Daar is de glas-still (.lineup_backdrop, telefoon/tablet/reduced motion) niet nodig. */
+@media (min-width: 992px) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  [data-bgf-lineup-backdrop] { display: none; }
+}
 
