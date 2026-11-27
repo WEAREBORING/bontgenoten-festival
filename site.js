@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.27.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.28.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1321,7 +1321,7 @@
 
   /* data-bgf-cursor (op Global - Nav): jubileumcursor, twee gekruiste creme ovalen met mix-blend-mode difference, zodat het
      overlappende deel de pagina laat zien. Alleen met muis (hover + fijne pointer) en zonder reduced motion. Standen (Figma 642:2106):
-     standaard 26 px, hover 40 px (links, knoppen, [data-bgf-cursor-hover]), ingedrukt 20 px, slepen 80 x 40 ([data-bgf-cursor-drag]).
+     standaard 26 px, hover 20 px (links, knoppen, [data-bgf-cursor-hover]; krimpt, BORING 2026-11-27), ingedrukt 23 px, slepen 80 x 40 ([data-bgf-cursor-drag]).
      [data-bgf-cursor-label="tekst"]: hover-stand met de tekst naast de ovalen (Section - Video: "Geluid aan" / "Geluid uit"; de
      module van het element mag de tekst wisselen, de cursor leest hem bij elke beweging en klik opnieuw).
      [data-bgf-cursor-icon]: de ovalen vormen een teken, ook bij elke beweging en klik opnieuw gelezen (Section - Video):
@@ -1332,7 +1332,7 @@
   if (document.querySelector('[data-bgf-cursor]') && fine.matches && !reduce.matches) withGsap(function (gsap) {
     // [breedte, hoogte] van het liggende ovaal; het staande ovaal is gespiegeld, behalve bij slepen
     // slepen en geluid uit naar Figma "updated sound off and drag cursor" (646:182, BORING 2026-11-27)
-    var sizes = { base: [26, 14, 14, 26], hover: [40, 18, 18, 40], press: [20, 10, 10, 20], drag: [74, 18, 20, 40],
+    var sizes = { base: [26, 14, 14, 26], hover: [20, 10, 10, 20], press: [23, 12, 12, 23], drag: [74, 18, 20, 40],
       mute: [26, 8, 8, 26], sound: [9, 26, 9, 26] };
     // per stand: draaiing en zijwaartse verschuiving (px) van het liggende en het staande ovaal; overal elders 0
     var poses = { mute: { rotation: -45, left: [0, 0] }, sound: { rotation: 0, left: [-6, 6] } };
