@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.16.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.17.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -213,6 +213,38 @@
       window.ScrollTrigger.create({ trigger: el, start: 'top 80%', onEnter: function () { tl.play(); } });
     });
   }, ['ScrollTrigger']);
+
+  /* data-bgf-collage (Section - Gallery, gallery_list met het slot "Foto's"): elke foto (gallery_item) krijgt een plek uit het patroon
+     van Figma (galerij optie 2, 642:2786: 7 plekken in een blok van 1440 x 1104, staand 204 x 272 of liggend 318 x 212, snelheid 0.6/1/1.3).
+     Foto 8 begint het patroon opnieuw een blok lager, gespiegeld, dus de klant kan foto's toevoegen of weghalen zonder iets in te stellen;
+     de lijst wordt zo hoog als nodig en de titel blijft ondertussen in het midden staan (sticky, Webflow). Snelheid gaat als
+     data-bgf-speed naar data-bgf-parallax. Vanaf 992px; daaronder het raster van 2 kolommen uit Webflow. */
+  var COLLAGE = [
+    { x: 1188, y: 80, w: 204, s: 1 }, { x: 162, y: 150, w: 318, s: 0.6 }, { x: 846, y: 210, w: 204, s: 0.6 }, { x: 276, y: 600, w: 204, s: 1.3 },
+    { x: 1074, y: 680, w: 318, s: 0.6 }, { x: 48, y: 760, w: 204, s: 1 }, { x: 618, y: 850, w: 318, s: 1 }
+  ];
+  each('[data-bgf-collage]', function (list) {
+    var wide = window.matchMedia('(min-width: 992px)');
+    function layout() {
+      // het slot van Webflow zet de foto's in een kale <div> (site.css: display contents)
+      var root = list.children.length === 1 && !list.children[0].className ? list.children[0] : list;
+      var items = [].slice.call(root.children), k = list.clientWidth / 1440, bottom = 0;
+      items.forEach(function (el, i) {
+        if (!wide.matches) { el.style.left = el.style.top = el.style.width = el.style.aspectRatio = ''; el.removeAttribute('data-bgf-speed'); return; }
+        var p = COLLAGE[i % 7], block = Math.floor(i / 7), portrait = p.w < 300, h = portrait ? p.w * 4 / 3 : p.w * 2 / 3;
+        var x = block % 2 ? 1440 - p.x - p.w : p.x, y = block * 1104 + p.y;   // elk tweede blok gespiegeld
+        el.style.left = (x / 14.4) + '%';
+        el.style.top = (y * k) + 'px';
+        el.style.width = (p.w / 14.4) + '%';
+        el.style.aspectRatio = portrait ? '3 / 4' : '3 / 2';
+        el.setAttribute('data-bgf-speed', p.s);
+        bottom = Math.max(bottom, y + h);
+      });
+      list.style.height = wide.matches && items.length ? ((bottom + 80) * k) + 'px' : '';
+    }
+    layout();
+    window.addEventListener('resize', layout);
+  });
 
   /* data-bgf-parallax (Section - Gallery): kinderen met data-bgf-speed bewegen anders mee met scrollen.
      1 = gewoon mee, kleiner = trager (zakt, zoals de titel), groter = sneller (stijgt, zoals de foto's). De waarde van

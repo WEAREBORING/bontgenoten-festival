@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.css v1.16.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
+/* Bontgenoten Festival site.css v1.17.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
 
 /* Vloeiende root-fontgrootte: 1rem = 16px op het ontwerpformaat (1440 x 900) en daaronder. Groter alleen als het scherm
    zowel breder als hoger is, tot 18px; zo past een sectie ook op een breed maar laag scherm.
@@ -96,6 +96,11 @@ html.bgf-nav-open { overflow: hidden; }
   [data-bgf-card] { margin-top: var(--_typography---space--section-y); }
 }
 .bgf-dim { position: absolute; inset: 0; z-index: 5; background-color: var(--_theme---surface--dark); opacity: 0; pointer-events: none; }
+
+/* data-bgf-collage (Section - Gallery): het slot zet de foto's in een <div> zonder class; die doet niet mee aan de opmaak van de lijst */
+[data-bgf-collage] > div:not([class]) { display: contents; }
+/* de titel is sticky; overflow: hidden op .main-wrapper (Webflow) maakt daar een scrollcontainer van, clip knipt hetzelfde zonder dat */
+.main-wrapper:has([data-bgf-collage]) { overflow: clip; }
 
 /* data-bgf-curve (Section - Marquee): de SVG met de tekst op de gebogen lijn ligt boven het verloop; site.js knipt de sectie tot de band */
 .bgf-curve { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
