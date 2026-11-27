@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.26.3: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.27.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -760,6 +760,8 @@
       slider.setAttribute('aria-roledescription', 'carrousel');
       slider.setAttribute('aria-label', 'Line-up');
       list.setAttribute('data-bgf-cursor-drag', '');
+      // tekst naast de cursor, zoals bij de video (BORING 2026-11-27); in Webflow te overschrijven met data-bgf-cursor-label op de lijst
+      if (!list.hasAttribute('data-bgf-cursor-label')) list.setAttribute('data-bgf-cursor-label', 'Drag');
       section.setAttribute('data-bgf-lineup-ready', '');
 
       // ---- coverflow (BORING koos hem 2026-11-27 uit de varianten): de middelste kaart recht, de buren gedraaid (62°) en naar achter,
@@ -833,7 +835,10 @@
           // teller links en genre rechts wisselen zoals de link-hover, in de richting van het schuiven (BORING 2026-11-27)
           var slotPos = Math.round(pos), dir = lastSlotPos === null || slotPos >= lastSlotPos ? 1 : -1;
           lastSlotPos = slotPos;
-          swapText(counter, '<b>' + pad(uniq.indexOf(now) + 1) + '</b> <span>/ ' + pad(uniq.length) + '</span>', dir);
+          // alleen het nummer wisselt; "/ 08" staat stil (BORING 2026-11-27)
+          var num = counter.querySelector('b'), total = counter.querySelector('span');
+          if (num && total) { swapText(num, pad(uniq.indexOf(now) + 1), dir); total.textContent = '/ ' + pad(uniq.length); }
+          else counter.innerHTML = '<b>' + pad(uniq.indexOf(now) + 1) + '</b> <span>/ ' + pad(uniq.length) + '</span>';
           swapText(infoGenre, (now && now.genre) || '', dir);
         }
       }
@@ -1349,7 +1354,8 @@
     // direct op de muis, zonder naloop
     var labelled = null;
     function setLabel() {
-      var text = labelled ? labelled.getAttribute('data-bgf-cursor-label') : '';
+      // tijdens het slepen niet: de instructie is dan klaar en het brede sleep-ovaal zou eroverheen vallen
+      var text = labelled && !dragging ? labelled.getAttribute('data-bgf-cursor-label') : '';
       icon = labelled && labelled.getAttribute('data-bgf-cursor-icon') || '';
       if (label.textContent !== text) label.textContent = text;
       label.style.visibility = text ? '' : 'hidden';
@@ -1385,13 +1391,15 @@
     window.addEventListener('scroll', function () { if (lastX >= 0) under(document.elementFromPoint(lastX, lastY)); }, { passive: true });
     function under(t) {
       labelled = t && t.closest('[data-bgf-cursor-label]');
-      hovering = !!(t && (labelled || t.closest(hoverSel)));
+      // een sleepvlak met tekst (line-up) houdt de gewone maat; alleen klikbare dingen geven de hover-stand
+      hovering = !!(t && ((labelled && !labelled.hasAttribute('data-bgf-cursor-drag')) || t.closest(hoverSel)));
       setLabel();
       setState();
     }
     document.addEventListener('mousedown', function (e) {
       pressed = true;
       dragging = !!(e.target instanceof Element && e.target.closest('[data-bgf-cursor-drag]'));
+      setLabel();
       setState();
     });
     document.addEventListener('mouseup', function () { pressed = false; dragging = false; setState(); setTimeout(function () { setLabel(); setState(); }); });   // na de klik: nieuwe tekst en teken
