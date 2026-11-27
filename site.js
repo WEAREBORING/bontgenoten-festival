@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.25.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.26.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -42,6 +42,72 @@
       st.kill = function () { window.ScrollTrigger.removeEventListener('refreshInit', clear); clear(); kill(); };
       return st;
     });
+  }
+
+  /* Filterbalk (line-up dagen, FAQ-tabs; BORING 2026-11-27): een pil (.bgf-day-pill) schuift onder de knoppen naar de gekozen knop; de tekst
+     van de twee knoppen die van kleur wisselen gaat zoals de link-hover: elk teken schuift in zijn masker opzij en een kopie in de nieuwe
+     kleur (text-shadow, één tekenbreedte ernaast) schuift erin, in de richting van de pil. Tekens alleen met muis en zonder reduced motion
+     (anders de kleurfade uit site.css). isOn(knop) = gekozen. change(oud, nieuw, zet) zet de stand (zet) en animeert; geeft de richting. */
+  function pillBar(gsap, buttons, isOn) {
+    var bar = buttons[0].parentNode, pill = document.createElement('span');
+    pill.className = 'bgf-day-pill';
+    pill.setAttribute('aria-hidden', 'true');
+    bar.insertBefore(pill, bar.firstChild);
+    bar.setAttribute('data-bgf-day-pill', '');
+    if (finePointer.matches && !reduce.matches) document.fonts.ready.then(function () {
+      buttons.forEach(function (b) {
+        b.bgfChars = window.SplitText.create(b.querySelector('div') || b, { type: 'chars', mask: 'chars' }).chars;
+        b.style.transition = 'none';
+      });
+    });
+    function move(animate) {
+      var on = buttons.filter(isOn)[0];
+      if (!on) return;
+      var to = { x: on.offsetLeft, y: on.offsetTop, width: on.offsetWidth, height: on.offsetHeight };
+      if (animate && !reduce.matches) gsap.to(pill, Object.assign({ duration: 0.45, ease: 'power3.out', overwrite: true }, to));
+      else gsap.set(pill, Object.assign({ overwrite: true }, to));
+    }
+    function change(was, now, apply) {
+      var dir = buttons.indexOf(now) < buttons.indexOf(was) ? -1 : 1, pair = [was, now].filter(Boolean);
+      var olds = pair.map(function (b) { return getComputedStyle(b).color; });
+      apply();
+      pair.forEach(function (b, i) {
+        var chars = b.bgfChars, ink = getComputedStyle(b).color;
+        if (!chars) return;
+        // de vorige wissel stoppen via zijn eigen tween (killTweensOf liet de stagger-timeline met onComplete leven: tekst onzichtbaar bij snel klikken)
+        if (b.bgfInk) b.bgfInk.kill();
+        chars.forEach(function (c) { c.style.color = olds[i]; c.style.textShadow = (-dir * c.offsetWidth) + 'px 0 0 ' + ink; });
+        b.bgfInk = gsap.fromTo(chars, { xPercent: 0 }, { xPercent: 100 * dir, duration: 0.7, ease: 'expo.out', stagger: Math.min(0.03, 0.3 / Math.max(1, chars.length - 1)),
+          onComplete: function () { b.bgfInk = null; chars.forEach(function (c) { c.style.color = c.style.textShadow = ''; }); gsap.set(chars, { xPercent: 0 }); } });
+      });
+      move(true);
+      return dir;
+    }
+    window.addEventListener('resize', function () { move(false); });
+    move(false);
+    return { move: move, change: change };
+  }
+
+  /* Tekst wisselen zoals de link-hover (BORING 2026-11-27: teller en genre van de line-up): de oude tekens schuiven in hun masker opzij weg, de
+     nieuwe schuiven erin (dir 1 = naar links, nieuw komt van rechts). Zonder muis, met reduced motion of de eerste keer: direct. */
+  function swapText(el, html, dir) {
+    if (!el) return;
+    var gsap = window.gsap;
+    if (el.bgfSwap) el.bgfSwap.progress(1);
+    if (!gsap || !window.SplitText || !finePointer.matches || reduce.matches || !el.textContent.trim() || !html) { el.innerHTML = html; return; }
+    var out = document.createElement('div'), inn = document.createElement('div'), cs = getComputedStyle(el);
+    while (el.firstChild) out.appendChild(el.firstChild);
+    inn.innerHTML = html;
+    if (cs.position === 'static') el.style.position = 'relative';
+    out.style.cssText = 'display:inline-block;white-space:nowrap';
+    inn.style.cssText = 'display:inline-block;white-space:nowrap;position:absolute;top:0;' + (/right|end/.test(cs.textAlign) ? 'right:0' : 'left:0');
+    el.appendChild(out);
+    el.appendChild(inn);
+    var a = window.SplitText.create(out, { type: 'chars', mask: 'chars' }).chars, b = window.SplitText.create(inn, { type: 'chars', mask: 'chars' }).chars;
+    var st = function (n) { return { each: Math.min(0.03, 0.3 / Math.max(1, n - 1)), from: dir > 0 ? 'start' : 'end' }; };
+    el.bgfSwap = gsap.timeline({ onComplete: function () { el.bgfSwap = null; el.innerHTML = html; } })
+      .to(a, { xPercent: -100 * dir, duration: 0.5, ease: 'expo.out', stagger: st(a.length) }, 0)
+      .fromTo(b, { xPercent: 100 * dir }, { xPercent: 0, duration: 0.7, ease: 'expo.out', stagger: st(b.length) }, 0);
   }
 
   /* data-bgf-year: zet het huidige jaar (bijvoorbeeld het copyright in de footer) */
@@ -158,7 +224,7 @@
      Button "Creme hover-rand" andersom: daar zijn de lijnen in rust vol (ze vormen de achtergrond), bij hover gaan ze eruit
      (omhoog weg, de knop wordt doorzichtig met alleen de rand) en bij verlaten komen ze er van onder weer in.
      Snel in en uit of halverwege terug: een lijn die nog boven weg aan het gaan is, keert om; nooit een sprong.
-     Tekst per teken (BORING 2026-11-27, zoals de link-hover): de tekst (.button_text, .faq_tab-text) wordt in tekens gesplitst en elk teken
+     Tekst per teken (BORING 2026-11-27, zoals de link-hover): de tekst (.button_text) wordt in tekens gesplitst en elk teken
      schuift naar zijn kopie (de text-shadow 1em lager, die erft per teken), met een kleine stagger; het masker is de text-wrapper.
      Alleen met muis en zonder reduced motion; anders (en zonder JS) blijft de CSS-slide van de hele tekst. [data-bgf-chars] zet die
      CSS-transform uit (site.css). button.bgfChars = de tekens, ook voor de kleurwissel van Tickets in de nav. */
@@ -170,61 +236,50 @@
       if (hosts.indexOf(host) < 0) hosts.push(host);
     });
     var stagger = { amount: 0.15, from: 'random' };
-    function fillIn(lines) {
+    // per knop één lijnen-tween (button.bgfLineTw), die de volgende stopt: overwrite liet de stagger-timeline van een fillOut leven en zijn
+    // onComplete (lijnen onder klaarzetten) kwam dan midden in de volgende beweging
+    function fillIn(button, lines) {
+      if (button.bgfLineTw) button.bgfLineTw.kill();
       // wat boven weg is (of bijna), begint weer onder; wat nog onderweg is, keert vanaf waar het is
       [].forEach.call(lines, function (l) { if (gsap.getProperty(l, 'yPercent') <= -100) gsap.set(l, { yPercent: 101 }); });
-      gsap.to(lines, { yPercent: 0, duration: 0.4, ease: 'expo.out', stagger: stagger, overwrite: true });
+      button.bgfLineTw = gsap.to(lines, { yPercent: 0, duration: 0.4, ease: 'expo.out', stagger: stagger });
     }
-    function fillOut(lines) {
-      gsap.to(lines, { yPercent: -101, duration: 0.4, ease: 'expo.out', stagger: stagger, overwrite: true,
+    function fillOut(button, lines) {
+      if (button.bgfLineTw) button.bgfLineTw.kill();
+      button.bgfLineTw = gsap.to(lines, { yPercent: -101, duration: 0.4, ease: 'expo.out', stagger: stagger,
         onComplete: function () { gsap.set(lines, { yPercent: 101 }); } });
     }
     // tekens naar y (-100 = de kopie in beeld, 0 = rust); de hele golf hoogstens 0.7 s
-    // FAQ-tabs zijwaarts zoals de link-hover (BORING 2026-11-27): -100 wordt xPercent 100, met de timing van de links
-    function textTo(button, y, from) {
+    function textTo(button, y) {
       var chars = button.bgfChars;
-      if (!chars) return;
-      var side = button.bgfSide, prop = side ? 'xPercent' : 'yPercent', vars = { duration: side ? 0.7 : 0.5, ease: 'expo.out', overwrite: true,
-        stagger: side ? Math.min(0.03, 0.3 / Math.max(1, chars.length - 1)) : Math.min(0.02, 0.2 / Math.max(1, chars.length - 1)) };
-      vars[prop] = side ? -y : y;
-      if (from == null) gsap.to(chars, vars); else { var f = {}; f[prop] = side ? -from : from; gsap.fromTo(chars, f, vars); }
+      if (chars) gsap.to(chars, { yPercent: y, duration: 0.5, ease: 'expo.out', stagger: Math.min(0.02, 0.2 / Math.max(1, chars.length - 1)), overwrite: true });
     }
     hosts.forEach(function (button) {
       var lines = button.querySelectorAll('.button_background-line, [data-bgf-fill-line]');
       if (!lines.length) return;
       var full = parseFloat(window.getComputedStyle(lines[0]).height) > 0;   // lijnen in rust vol = omgekeerde hover
       gsap.set(lines, { height: '101%', yPercent: full ? 0 : 101 });
-      var text = button.querySelector('.button_text, .faq_tab-text');
+      var text = button.querySelector('.button_text');
       if (text && finePointer.matches && !reduce.matches) document.fonts.ready.then(function () {
-        button.bgfSide = text.classList.contains('faq_tab-text');
-        // de kopie: bij knoppen de text-shadow 1em lager (erft per teken); bij de FAQ-tabs één tekenbreedte links, in dezelfde kleur, met masker per teken
-        var copy = button.bgfSide && (getComputedStyle(text).textShadow.match(/^(rgba?\([^)]*\)|#\w+)/) || [])[1];
-        button.bgfChars = window.SplitText.create(text, button.bgfSide ? { type: 'chars', mask: 'chars' } : { type: 'chars' }).chars;   // SplitText zet aria-label op de tekst, de tekens aria-hidden
-        if (copy) button.bgfChars.forEach(function (c) { c.style.textShadow = (-c.offsetWidth) + 'px 0 0 ' + copy; });
+        button.bgfChars = window.SplitText.create(text, { type: 'chars' }).chars;   // SplitText zet aria-label op de tekst, de tekens aria-hidden
         text.setAttribute('data-bgf-chars', '');
       });
       var on = false;
       function enter() {
-        if (on || !desktop.matches || reduce.matches || button.getAttribute('aria-selected') === 'true') return;
+        if (on || !desktop.matches || reduce.matches) return;
         on = true;
         if (button.bgfSwap) button.bgfSwap.progress(1);   // kleurwissel van de nav-knop eerst af
-        if (full) fillOut(lines); else fillIn(lines);
+        if (full) fillOut(button, lines); else fillIn(button, lines);
         textTo(button, -100);
       }
       function leave() {
         if (!on) return;
         on = false;
-        if (full) fillIn(lines); else fillOut(lines);
+        if (full) fillIn(button, lines); else fillOut(button, lines);
         textTo(button, 0);
       }
       button.addEventListener('mouseenter', enter);
       button.addEventListener('mouseleave', leave);
-      // een tab die niet meer actief is (data-bgf-tabs) gaat eruit als een hover-uit: de lijnen staan vol en schuiven omhoog weg
-      button.addEventListener('bgf:deselect', function () {
-        if (!desktop.matches || reduce.matches || full) return;
-        on = false; gsap.set(lines, { yPercent: 0 }); fillOut(lines);
-        textTo(button, 0, -100);   // tekens van hun creme kopie terug (zonder tekens doet de tabs-module de hele tekst)
-      });
       // naar tablet of touch terwijl de muis erop staat: terug naar rust
       desktop.addEventListener('change', leave);
     });
@@ -700,6 +755,7 @@
       live.setAttribute('aria-live', 'polite');
       slider.appendChild(live);
       if (counter) { counter.removeAttribute('aria-live'); counter.setAttribute('aria-hidden', 'true'); }
+      if (infoGenre) infoGenre.setAttribute('aria-hidden', 'true');   // het genre staat sinds 2026-11-27 rechts in de navigatiebalk; de kaart noemt het al
       slider.setAttribute('role', 'region');
       slider.setAttribute('aria-roledescription', 'carrousel');
       slider.setAttribute('aria-label', 'Line-up');
@@ -774,11 +830,15 @@
           active = now;
           var uniq = ring.filter(function (x, i) { return ring.indexOf(x) === i; });
           var pad = function (v) { return (v < 10 ? '0' : '') + v; };
-          counter.innerHTML = '<b>' + pad(uniq.indexOf(now) + 1) + '</b> <span>/ ' + pad(uniq.length) + '</span>';
+          // teller links en genre rechts wisselen zoals de link-hover, in de richting van het schuiven (BORING 2026-11-27)
+          var slotPos = Math.round(pos), dir = lastSlotPos === null || slotPos >= lastSlotPos ? 1 : -1;
+          lastSlotPos = slotPos;
+          swapText(counter, '<b>' + pad(uniq.indexOf(now) + 1) + '</b> <span>/ ' + pad(uniq.length) + '</span>', dir);
+          swapText(infoGenre, (now && now.genre) || '', dir);
         }
       }
       // de getekende stand loopt zacht achter de echte aan (gedempt, zoals smooothy); de naam komt zodra de doelkaart bijna in het midden staat
-      var pressed = false;
+      var pressed = false, lastSlotPos = null;
       gsap.ticker.add(function (time, deltaMs) {
         var c = cur(), dt = Math.min(deltaMs, 50) / 1000;
         pos = reduce.matches ? c : pos + (c - pos) * (1 - Math.exp(-dt * 14));
@@ -799,7 +859,7 @@
         if (shown === a && gsap.getProperty(info, 'opacity') === 1) return;
         shown = a;
         if (split) { split.revert(); split = null; }
-        infoName.textContent = a.name; infoTag.textContent = a.tag ? '(' + a.tag + ')' : ''; infoGenre.textContent = a.genre;
+        infoName.textContent = a.name; infoTag.textContent = a.tag ? '(' + a.tag + ')' : '';
         if (nameTl) nameTl.kill();
         if (reduce.matches) { nameTl = gsap.fromTo(info, { opacity: 0 }, { opacity: 1, y: 0, duration: 0.3 }); return; }
         split = window.SplitText.create(infoName, { type: 'words,chars', mask: 'chars' });   // words: een lange naam breekt tussen woorden, niet midden in een woord
@@ -807,7 +867,7 @@
           .set(info, { opacity: 1, y: 0 })
           .fromTo(infoBox, { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: 'expo.out' })
           .fromTo(split.chars, { yPercent: 105 }, { yPercent: 0, duration: 0.5, stagger: 0.012 }, 0.05)
-          .fromTo([infoTag, infoGenre], { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.05 }, 0.15);
+          .fromTo(infoTag, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.05 }, 0.15);
       }
       function settle() {
         settled = true; tween = null; target = Math.round(cur());
@@ -865,21 +925,8 @@
          gekozen dag; de kaarten gaan na elkaar weg naar de kant tegengesteld aan de pil (pil naar rechts = kaarten naar links) en de
          nieuwe komen na elkaar binnen van de kant waar de pil heen gaat. De kaart beweegt met --bgf-out-x (losse translate in site.css,
          want render() zet de transform van elk item) en .lineup_card krijgt de opacity (die van het item zet render() ook). */
-      var bar = days.length ? days[0].parentNode : null, pill = null;
-      if (bar) {
-        pill = document.createElement('span');
-        pill.className = 'bgf-day-pill';
-        pill.setAttribute('aria-hidden', 'true');
-        bar.insertBefore(pill, bar.firstChild);
-        bar.setAttribute('data-bgf-day-pill', '');
-      }
-      function movePill(animate) {
-        var on = days.filter(function (b) { return b.getAttribute('aria-pressed') === 'true'; })[0];
-        if (!pill || !on) return;
-        var to = { x: on.offsetLeft, y: on.offsetTop, width: on.offsetWidth, height: on.offsetHeight };
-        if (animate && !reduce.matches) gsap.to(pill, Object.assign({ duration: 0.45, ease: 'power3.out', overwrite: true }, to));
-        else gsap.set(pill, Object.assign({ overwrite: true }, to));
-      }
+      var dayBar = days.length ? pillBar(gsap, days, function (b) { return b.getAttribute('aria-pressed') === 'true'; }) : null;
+      function movePill(animate) { if (dayBar) dayBar.move(animate); }
       // zichtbare kaarten van links naar rechts op het scherm
       function visibleCards() {
         return cards.filter(function (c) { return c.style.visibility !== 'hidden'; }).map(function (c) {
@@ -907,37 +954,12 @@
               .to(inn.map(function (o) { return o.face; }), { opacity: 1, duration: slow ? 0.15 : 0.5, stagger: slow ? 0 : 0.08, ease: 'power3.out' }, '<');
           });
       }
-      // dagtekst wisselt van kleur zoals de link-hover (BORING 2026-11-27): elk teken schuift in zijn masker opzij en een kopie in de
-      // nieuwe kleur (text-shadow, één tekenbreedte ernaast) schuift erin, in de richting van de pil. Alleen met muis en zonder reduced
-      // motion; anders de kleurfade uit site.css
-      if (finePointer.matches && !reduce.matches) document.fonts.ready.then(function () {
-        days.forEach(function (b) {
-          b.bgfChars = window.SplitText.create(b.querySelector('div') || b, { type: 'chars', mask: 'chars' }).chars;
-          b.style.transition = 'none';
-        });
-      });
-      function slideInk(buttons, dir, change) {
-        var olds = buttons.map(function (b) { return getComputedStyle(b).color; });
-        change();
-        buttons.forEach(function (b, i) {
-          var chars = b.bgfChars, ink = getComputedStyle(b).color;
-          if (!chars) return;
-          // de vorige wissel van deze dag stoppen via zijn eigen tween: killTweensOf(chars) liet de omhullende timeline (met de stagger en
-          // onComplete) leven, die dan midden in de nieuwe wissel de kopie wiste, zodat de dag onzichtbaar werd (BORING 2026-11-27, snel klikken)
-          if (b.bgfInk) b.bgfInk.kill();
-          chars.forEach(function (c) { c.style.color = olds[i]; c.style.textShadow = (-dir * c.offsetWidth) + 'px 0 0 ' + ink; });
-          b.bgfInk = gsap.fromTo(chars, { xPercent: 0 }, { xPercent: 100 * dir, duration: 0.7, ease: 'expo.out', stagger: Math.min(0.03, 0.3 / Math.max(1, chars.length - 1)),
-            onComplete: function () { b.bgfInk = null; chars.forEach(function (c) { c.style.color = c.style.textShadow = ''; }); gsap.set(chars, { xPercent: 0 }); } });
-        });
-      }
       days.forEach(function (button) {
         button.setAttribute('aria-pressed', String(button === days[0]));
         button.addEventListener('click', function () {
           var was = days.filter(function (b) { return b.getAttribute('aria-pressed') === 'true'; })[0];
           if (button === was) return;
-          var dir = days.indexOf(button) < days.indexOf(was) ? -1 : 1;
-          slideInk([was, button], dir, function () { days.forEach(function (b) { b.setAttribute('aria-pressed', String(b === button)); }); });
-          movePill(true);
+          var dir = dayBar.change(was, button, function () { days.forEach(function (b) { b.setAttribute('aria-pressed', String(b === button)); }); });
           swapTo(button.getAttribute('data-bgf-lineup-day'), dir);
         });
       });
@@ -1202,21 +1224,15 @@
     };
     var select = function (tab, focus) {
       var was = tabs.filter(function (t) { return t.getAttribute('aria-selected') === 'true'; })[0];
-      // de vorige tab springt niet terug maar gaat eruit als een hover-uit (lijnen: button-module; tekst: hier, van zijn creme kopie terug)
-      if (was && was !== tab) {
-        var text = was.querySelector('.faq_tab-text');
-        if (text && !text.hasAttribute('data-bgf-chars') && window.gsap && !reduce.matches && window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 992px)').matches) {
-          text.style.transition = 'none';
-          window.gsap.fromTo(text, { yPercent: -100 }, { yPercent: 0, duration: 0.3, ease: 'power3.inOut',
-            onComplete: function () { window.gsap.set(text, { clearProps: 'transform' }); text.style.transition = ''; } });
-        }
-        was.dispatchEvent(new CustomEvent('bgf:deselect'));
-      }
-      tabs.forEach(function (t) {
-        var on = t === tab;
-        t.setAttribute('aria-selected', on);
-        t.tabIndex = on ? 0 : -1;
-      });
+      var apply = function () {
+        tabs.forEach(function (t) {
+          var on = t === tab;
+          t.setAttribute('aria-selected', on);
+          t.tabIndex = on ? 0 : -1;
+        });
+      };
+      // filterbalk zoals de line-up dagen (BORING 2026-11-27): pil schuift, tekst wisselt zoals de link-hover
+      if (root.bgfPills && was && was !== tab) root.bgfPills.change(was, tab, apply); else { apply(); if (root.bgfPills) root.bgfPills.move(false); }
       if (focus) tab.focus();
       if (switching) switching.progress(1).kill();
       var prev = current, next = panelFor(tab);
@@ -1247,6 +1263,7 @@
     });
     var requested = new URLSearchParams(window.location.search).get('faq');
     select(tabs.filter(function (t) { return t.getAttribute('data-bgf-tab') === requested; })[0] || tabs[0]);
+    withGsap(function (gsap) { root.bgfPills = pillBar(gsap, tabs, function (t) { return t.getAttribute('aria-selected') === 'true'; }); }, ['SplitText']);
   });
 
   /* data-bgf-accordion (de lijst) met data-bgf-accordion-item > data-bgf-accordion-trigger (button) + data-bgf-accordion-panel:
@@ -1464,11 +1481,21 @@
       var dir = scrollDir, chars = tickets.bgfChars || [ticketText];
       ticketText.style.textShadow = '0 ' + dir + 'em 0 ' + getComputedStyle(ticketText).color;
       ticketText.style.color = oldInk;
-      swapTl = g.timeline({ onComplete: function () {
+      // één veeg (BORING 2026-11-27; eerst stroken met willekeurige vertraging en tekens op een eigen klok: losse stukjes, tekst even zwart op zwart):
+      // alle stroken samen als één rand door de knop, en de tekst wisselt precies waar die rand langs de tekst gaat
+      var H = tickets.offsetHeight, tr = ticketText.parentNode.getBoundingClientRect(), br = tickets.getBoundingClientRect();
+      var t0 = tr.top - br.top, L = tr.height || 1, s = { e: 0 };
+      if (tickets.bgfLineTw) tickets.bgfLineTw.kill();
+      var wipe = function () {
+        var b = dir > 0 ? H * (1 - s.e) : H * s.e;
+        var p = Math.max(0, Math.min(1, dir > 0 ? (t0 + L - b) / L : (b - t0) / L));
+        g.set(ticketLines, { yPercent: (dir > 0 ? 101 : -101) * (1 - s.e) });
+        g.set(chars, { yPercent: -100 * dir * p });
+      };
+      wipe();   // meteen: de lijnen hebben de nieuwe kleur al
+      swapTl = g.to(s, { e: 1, duration: 0.55, ease: 'power3.inOut', onUpdate: wipe, onComplete: function () {
         ticketBg.style.backgroundColor = ticketText.style.color = ticketText.style.textShadow = ticketText.style.transition = '';
-        g.set(chars, { clearProps: 'transform' }); swapTl = tickets.bgfSwap = null; } })
-        .fromTo(ticketLines, { yPercent: dir > 0 ? 101 : -101 }, { yPercent: 0, duration: 0.5, ease: 'expo.out', stagger: { amount: 0.15, from: 'random' }, overwrite: true })
-        .fromTo(chars, { yPercent: 0 }, { yPercent: -100 * dir, duration: 0.5, ease: 'expo.out', stagger: Math.min(0.02, 0.15 / Math.max(1, chars.length - 1)), overwrite: true }, 0);
+        g.set(ticketLines, { yPercent: 0 }); g.set(chars, { clearProps: 'transform' }); swapTl = tickets.bgfSwap = null; } });
       tickets.bgfSwap = swapTl;
     }
     function queueDark() { if (!ticking) { ticking = true; requestAnimationFrame(checkDark); } }
@@ -1493,14 +1520,96 @@
     document.fonts.ready.then(function () {
       each('a.nav_link[href], a.footer_detail[href], a.footer_legal-link[href]', function (link) {
         var chars = window.SplitText.create(link, { type: 'chars', mask: 'chars' }).chars;
+        var staggerOf = function (list) { return Math.min(0.03, (MAX - DUR) / Math.max(1, list.length - 1)); };
+        var alt = link.getAttribute('data-bgf-hover-text');
+        if (alt) {
+          // data-bgf-hover-text (Web Credits, BORING 2026-11-27): de tekst schuift weg en een andere tekst schuift erin, terug bij verlaten
+          if (getComputedStyle(link).position === 'static') link.style.position = 'relative';
+          var layer = document.createElement('span');
+          layer.setAttribute('aria-hidden', 'true');
+          layer.textContent = alt;
+          layer.style.cssText = 'position:absolute;top:0;left:0;white-space:nowrap';
+          link.appendChild(layer);
+          var altChars = window.SplitText.create(layer, { type: 'chars', mask: 'chars' }).chars;
+          gsap.set(altChars, { xPercent: -100 });
+          var swap = function (on) {
+            // eerst gaat de ene tekst weg, net daarna komt de andere: de twee teksten liggen op dezelfde plek
+            gsap.to(chars, { xPercent: on ? 100 : 0, duration: DUR, ease: 'expo.out', stagger: staggerOf(chars), overwrite: true, delay: on ? 0 : 0.2 });
+            gsap.to(altChars, { xPercent: on ? 0 : -100, duration: DUR, ease: 'expo.out', stagger: staggerOf(altChars), overwrite: true, delay: on ? 0.2 : 0 });
+          };
+          link.addEventListener('mouseenter', function () { swap(true); });
+          link.addEventListener('mouseleave', function () { swap(false); });
+          return;
+        }
         chars.forEach(function (c) { c.style.textShadow = (-c.offsetWidth) + 'px 0 0 currentColor'; });
-        var stagger = Math.min(0.03, (MAX - DUR) / Math.max(1, chars.length - 1));
-        var go = function (x) { gsap.to(chars, { xPercent: x, duration: DUR, ease: 'expo.out', stagger: stagger, overwrite: true }); };
+        var go = function (x) { gsap.to(chars, { xPercent: x, duration: DUR, ease: 'expo.out', stagger: staggerOf(chars), overwrite: true }); };
         link.addEventListener('mouseenter', function () { go(100); });
         link.addEventListener('mouseleave', function () { go(0); });
       });
     });
   }, ['SplitText']);
+
+  /* Logo-wall (BORING 2026-11-27): alle logo's even zwaar. Elk SVG-logo wordt op een klein canvas getekend; de viewBox wordt bijgesneden tot de
+     inkt (geen lege rand meer in het bestand) en de maat volgt uit gelijke oppervlakte (breedte ~ √verhouding: een breed logo wordt lager, een
+     rond logo groter), bijgestuurd naar de inktdichtheid (dunne lijnen iets groter, √, tussen 0.85 en 1.3). Alles past in het vak van
+     .logo-wall_item; opnieuw bij een andere maat. Zonder site.js of als het meten niet lukt: de vakken van Webflow. */
+  function measureLogo(svg) {
+    return new Promise(function (resolve) {
+      var vb = (svg.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+      if (vb.length !== 4 || !(vb[2] > 0) || !(vb[3] > 0)) return resolve(null);
+      var S = 300 / Math.max(vb[2], vb[3]), cw = Math.ceil(vb[2] * S), ch = Math.ceil(vb[3] * S);
+      var clone = svg.cloneNode(true);
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clone.setAttribute('width', cw);
+      clone.setAttribute('height', ch);
+      clone.removeAttribute('class');
+      clone.style.color = '#000';
+      var img = new Image();
+      img.onload = function () {
+        var cv = document.createElement('canvas'), ctx = cv.getContext('2d', { willReadFrequently: true }), d;
+        cv.width = cw; cv.height = ch;
+        ctx.drawImage(img, 0, 0);
+        try { d = ctx.getImageData(0, 0, cw, ch).data; } catch (e) { return resolve(null); }
+        var x0 = cw, y0 = ch, x1 = -1, y1 = -1, ink = 0;
+        for (var y = 0; y < ch; y++) for (var x = 0; x < cw; x++) {
+          if (d[(y * cw + x) * 4 + 3] < 128) continue;
+          ink++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+        if (x1 < 0) return resolve(null);
+        var bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+        resolve({ a: bw / bh, d: ink / (bw * bh), vb: [vb[0] + x0 / S, vb[1] + y0 / S, bw / S, bh / S].map(function (v) { return +v.toFixed(2); }).join(' ') });
+      };
+      img.onerror = function () { resolve(null); };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+    });
+  }
+  each('.logo-wall_list', function (list) {
+    var logos = [].slice.call(list.querySelectorAll('svg.logo-wall_logo'));
+    if (!logos.length || !window.ResizeObserver) return;
+    Promise.all(logos.map(measureLogo)).then(function (m) {
+      var dens = m.filter(Boolean).map(function (x) { return x.d; }).sort(function (a, b) { return a - b; });
+      if (!dens.length) return;
+      var med = dens[Math.floor(dens.length / 2)];
+      m.forEach(function (x, i) {
+        if (!x) return;
+        x.f = Math.max(0.85, Math.min(1.3, Math.sqrt(med / x.d)));
+        logos[i].setAttribute('viewBox', x.vb);
+      });
+      var size = function () {
+        var box = logos[0].parentNode, cs = getComputedStyle(box), c = Infinity;
+        var W = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), H = box.clientHeight - (parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)) / 2;   // de helft van de verticale padding mag gebruikt worden
+        m.forEach(function (x) { if (x) { var k = Math.sqrt(x.a) * x.f; c = Math.min(c, W / k, H * x.a / k); } });
+        m.forEach(function (x, i) {
+          if (!x) return;
+          var w = c * Math.sqrt(x.a) * x.f;
+          logos[i].style.width = w.toFixed(1) + 'px';
+          logos[i].style.height = (w / x.a).toFixed(1) + 'px';
+        });
+      };
+      size();
+      new ResizeObserver(size).observe(list);
+    });
+  });
 
   /* data-bgf-video="mp4-url" op een afbeelding (Section - About): de afbeelding wordt een stille, herhalende video met de afbeelding als
      poster; hij speelt alleen in beeld. Reduced motion: de afbeelding blijft. */
