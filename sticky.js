@@ -324,15 +324,20 @@ const one = (
 	 * Positions are kept in scroll past the parent's top meeting the
 	 * viewport's, the parent timeline's own terms.
 	 */
+	const docTop = (n) => { let y = 0; for (; n; n = n.offsetParent) y += n.offsetTop; return y }   // BORING
 	const measure = (shift        ) => {
 		const s = getComputedStyle(el)
 		const top = parseFloat(s.top)
 		if (s.position !== 'sticky' || !Number.isFinite(top) || scrolls(parent)) return null
 
+		/* BORING 2026-11-27: layout offsets instead of getBoundingClientRect. A rect takes an ancestor's transform along (the gallery
+		   comes in as a tilted card at scale 0.8), and a measure made then put the departure about 20% of the parent too early.
+		   Offsets ignore transforms, so the engine's own translate is not in them: r adds shift so the line below takes it out again. */
 		const position = el.style.position
 		el.style.position = 'static'
-		const r = el.getBoundingClientRect()
-		const p = parent.getBoundingClientRect()
+		const et = docTop(el) - scrollY, pt = docTop(parent) - scrollY
+		const r = { top: et + shift, bottom: et + el.offsetHeight + shift }   // measure takes shift back out below
+		const p = { top: pt, bottom: pt + parent.offsetHeight }
 		el.style.position = position
 
 		const ps = getComputedStyle(parent)
@@ -406,7 +411,7 @@ const one = (
 		let last = 0
 
 		const tick = () => {
-			const y = at(-parent.getBoundingClientRect().top - engage)
+			const y = at(scrollY - docTop(parent) - engage)   // BORING: offsets, see measure
 			if (y === last) return
 
 			last = y

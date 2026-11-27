@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.22.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.23.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -898,14 +898,36 @@
               .to(inn.map(function (o) { return o.face; }), { opacity: 1, duration: slow ? 0.15 : 0.5, stagger: slow ? 0 : 0.08, ease: 'power3.out' }, '<');
           });
       }
+      // dagtekst wisselt van kleur zoals de link-hover (BORING 2026-11-27): elk teken schuift in zijn masker opzij en een kopie in de
+      // nieuwe kleur (text-shadow, één tekenbreedte ernaast) schuift erin, in de richting van de pil. Alleen met muis en zonder reduced
+      // motion; anders de kleurfade uit site.css
+      if (finePointer.matches && !reduce.matches) document.fonts.ready.then(function () {
+        days.forEach(function (b) {
+          b.bgfChars = window.SplitText.create(b.querySelector('div') || b, { type: 'chars', mask: 'chars' }).chars;
+          b.style.transition = 'none';
+        });
+      });
+      function slideInk(buttons, dir, change) {
+        var olds = buttons.map(function (b) { return getComputedStyle(b).color; });
+        change();
+        buttons.forEach(function (b, i) {
+          var chars = b.bgfChars, ink = getComputedStyle(b).color;
+          if (!chars) return;
+          gsap.killTweensOf(chars);
+          chars.forEach(function (c) { c.style.color = olds[i]; c.style.textShadow = (-dir * c.offsetWidth) + 'px 0 0 ' + ink; });
+          gsap.fromTo(chars, { xPercent: 0 }, { xPercent: 100 * dir, duration: 0.7, ease: 'expo.out', stagger: Math.min(0.03, 0.3 / Math.max(1, chars.length - 1)),
+            onComplete: function () { chars.forEach(function (c) { c.style.color = c.style.textShadow = ''; }); gsap.set(chars, { xPercent: 0 }); } });
+        });
+      }
       days.forEach(function (button) {
         button.setAttribute('aria-pressed', String(button === days[0]));
         button.addEventListener('click', function () {
           var was = days.filter(function (b) { return b.getAttribute('aria-pressed') === 'true'; })[0];
           if (button === was) return;
-          days.forEach(function (b) { b.setAttribute('aria-pressed', String(b === button)); });
+          var dir = days.indexOf(button) < days.indexOf(was) ? -1 : 1;
+          slideInk([was, button], dir, function () { days.forEach(function (b) { b.setAttribute('aria-pressed', String(b === button)); }); });
           movePill(true);
-          swapTo(button.getAttribute('data-bgf-lineup-day'), days.indexOf(button) < days.indexOf(was) ? -1 : 1);
+          swapTo(button.getAttribute('data-bgf-lineup-day'), dir);
         });
       });
       movePill(false);
