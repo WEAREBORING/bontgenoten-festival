@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.15.1: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.16.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -11,6 +11,8 @@
   // gradient.js staat naast site.js (zelfde versie op jsDelivr, of lokaal in de test); alleen geladen waar data-bgf-gradient staat
   var gradientSrc = document.currentScript && document.currentScript.src ? document.currentScript.src.replace(/site(\.min)?\.js/, 'gradient$1.js') : null;
   var finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+  // plek op de pagina zonder transforms (offsetTop); de scheve kaarten (data-bgf-card) zouden getBoundingClientRect verschuiven
+  function docTop(n) { var y = 0; for (; n; n = n.offsetParent) y += n.offsetTop; return y; }
   function ready(fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
 
   /* data-bgf-year: zet het huidige jaar (bijvoorbeeld het copyright in de footer) */
@@ -343,7 +345,12 @@
         // de zijteksten (locaties) scrollen mee weg (BORING 2026-11-26). Ze staan met transform (translateY(-50%), rotate) in het midden;
         // daarom schuift een eigen variabele de losse translate (site.css), zodat die transform blijft staan
         gsap.fromTo(hero, { '--bgf-hero-out': '0px' }, { '--bgf-hero-out': function () { return -hero.offsetHeight + 'px'; }, ease: 'none', scrollTrigger: outRange() });
-        var pinLength = function () { return hero.offsetHeight + (lineupSection ? lineupSection.offsetHeight : 0); };
+        // tot de eerste kaart (galerij) de hero bedekt: hero + line-up + de ruimte boven de kaart (site.css, BORING 2026-11-26)
+        var firstCard = document.querySelector('[data-bgf-card]');
+        var pinLength = function () {
+          var gap = firstCard ? parseFloat(getComputedStyle(firstCard).marginTop) || 0 : 0;
+          return hero.offsetHeight + (lineupSection ? lineupSection.offsetHeight : 0) + Math.max(0, gap);
+        };
         window.ScrollTrigger.create({ trigger: hero, start: 'top top', end: function () { return '+=' + pinLength(); },
           pin: true, pinSpacing: false, invalidateOnRefresh: true,
           onUpdate: function (self) { update(Math.min(1, self.progress * pinLength() / hero.offsetHeight)); } });
@@ -367,12 +374,13 @@
       if (hero) { dim = document.createElement('div'); dim.className = 'bgf-dim'; dim.setAttribute('aria-hidden', 'true'); hero.appendChild(dim); }
       panels.forEach(function (panel, i) {
         // clamp: de laatste sectie (footer) haalt de bovenkant van het scherm niet; dan eindigt de overgang onderaan de pagina
-        var range = { trigger: panel, start: 'top bottom', end: 'clamp(top top)', scrub: true };
+        var range = { trigger: panel, start: function () { return docTop(panel) - window.innerHeight; },
+          end: function () { return Math.min(docTop(panel), window.ScrollTrigger.maxScroll(window)); }, scrub: true };
         gsap.fromTo(panel, { scale: 0.8, rotate: i % 2 ? 4 : -4, transformOrigin: '50% 0%' },
           { scale: 1, rotate: 0, ease: 'none', scrollTrigger: range });
         if (i === 0 && dim) {
           gsap.fromTo(dim, { opacity: 0 }, { opacity: 0.45, ease: 'none', scrollTrigger: range });
-          window.ScrollTrigger.create({ trigger: panel, start: 'top top',
+          window.ScrollTrigger.create({ trigger: panel, start: function () { return docTop(panel); },
             onEnter: function () { if (hero.bgfGradient) hero.bgfGradient.pause(); },
             onLeaveBack: function () { if (hero.bgfGradient) hero.bgfGradient.play(); } });
         }
@@ -381,9 +389,33 @@
     });
   }, ['ScrollTrigger']);
 
+  /* data-bgf-lock (Section - Video): de sectie klikt zacht vast bovenaan het scherm en blijft staan terwijl de volgende sectie
+     eroverheen schuift (zoals de "smooth sticky" van extrema.be). Zacht: over de laatste 40% schermhoogte loopt de sectie eerst iets
+     voor en remt dan af tot stilstand bovenaan (losse translate, de kaart-transform blijft van data-bgf-card); daarna een pin tot de
+     bovenkant van de volgende sectie bovenaan is. Vanaf 768px, zonder reduced motion. */
+  if (document.querySelector('[data-bgf-lock]') && !reduce.matches) withGsap(function (gsap) {
+    gsap.matchMedia().add('(min-width: 768px)', function () {
+      var locks = [].slice.call(document.querySelectorAll('[data-bgf-lock]')).filter(function (el) { return el.nextElementSibling; });
+      var clear = function () { locks.forEach(function (el) { el.style.translate = ''; }); };
+      window.ScrollTrigger.addEventListener('refreshInit', clear);
+      locks.forEach(function (el) {
+        // u = 1 → 0 over de aanloop; stand t.o.v. normaal scrollen: -D·u·(1-u)², dus bovenaan snelheid 0 en aan het begin gewoon mee
+        var ease = function (self) {
+          var u = 1 - self.progress, D = window.innerHeight * 0.4, y = -D * u * (1 - u) * (1 - u);
+          el.style.translate = Math.abs(y) < 0.5 ? '' : '0 ' + y.toFixed(1) + 'px';
+        };
+        var next = el.nextElementSibling;
+        window.ScrollTrigger.create({ trigger: el, start: function () { return docTop(el) - window.innerHeight * 0.4; }, end: function () { return docTop(el); },
+          onUpdate: ease, onLeave: clear, onLeaveBack: clear });
+        window.ScrollTrigger.create({ trigger: el, start: function () { return docTop(el); }, end: function () { return docTop(next); }, pin: true, pinSpacing: false });
+      });
+      return function () { window.ScrollTrigger.removeEventListener('refreshInit', clear); clear(); };
+    });
+  }, ['ScrollTrigger']);
+
   /* data-bgf-scroll-text (Section - Quote): de tekst komt woord voor woord binnen terwijl je scrolt, met kleur zoals de Cultuur-sectie
-     van Afix (data-a-fill): een woord is eerst een wazige gloed in een jubileumkleur, de letters komen in die kleur op en worden dan
-     scherpe tekst in de eigen kleur. De gloed loopt in de volgorde van het verloop door de tekst (honey, sunset, cayenne, pine, lagoon,
+     van Afix (data-a-fill), maar zonder gloed of blur (BORING 2026-11-26): de letters komen op in een jubileumkleur en worden
+     dan de eigen kleur. De gloed loopt in de volgorde van het verloop door de tekst (honey, sunset, cayenne, pine, lagoon,
      flamingo), zodat het verloop over de quote schuift. Woorden die nog moeten komen staan op 15%. Vanaf 768px staat de sectie daarbij
      even vast (pin, één schermhoogte), daaronder loopt het mee met de sectie. Reduced motion: gewone tekst. */
   if (document.querySelector('[data-bgf-scroll-text]') && !reduce.matches) withGsap(function (gsap) {
@@ -405,19 +437,18 @@
             var t = Math.round((1 - Math.pow(1 - clamp01((n - i) / soft), 3)) * 40) / 40;
             if (last[i] === t) return;
             last[i] = t;
-            if (t === 0) { w.style.opacity = 0.15; w.style.color = ''; w.style.textShadow = ''; return; }
-            if (t === 1) { w.style.opacity = ''; w.style.color = ''; w.style.textShadow = ''; return; }
+            if (t === 0) { w.style.opacity = 0.15; w.style.color = ''; return; }
+            if (t === 1) { w.style.opacity = ''; w.style.color = ''; return; }
             // c = van kleur naar eigen kleur (pas in de tweede helft); de letters gaan van doorzichtig naar dekkend in de jubileumkleur
             var c = clamp01((t - 0.5) / 0.5);
             w.style.opacity = Math.max(0.15, clamp01(t / 0.35));
             w.style.color = 'rgba(' + mix(glows[i], ink, c).join(', ') + ', ' + clamp01((t - 0.1) / 0.4).toFixed(3) + ')';
-            w.style.textShadow = 'rgba(' + glows[i].join(', ') + ', ' + (0.9 * (1 - c)).toFixed(3) + ') 0 0 ' + (0.14 - 0.06 * c).toFixed(3) + 'em';
           });
         }
         draw(0);
         gsap.matchMedia().add({ wide: '(min-width: 768px)', narrow: '(max-width: 767px)' }, function (ctx) {
           var st = ctx.conditions.wide
-            ? { trigger: section, start: 'top top', end: '+=100%', pin: true, pinSpacing: true }   // pinSpacing expliciet: .main-wrapper is flex (dan staat het standaard uit)
+            ? { trigger: section, start: function () { return docTop(section); }, end: '+=100%', pin: true, pinSpacing: true }   // pinSpacing expliciet: .main-wrapper is flex (dan staat het standaard uit)
             : { trigger: el, start: 'top 80%', end: 'bottom 45%' };
           st.onUpdate = function (self) { draw(self.progress * (words.length + soft)); };
           st.onRefresh = st.onUpdate;
@@ -580,7 +611,58 @@
         var p0 = v[Math.max(0, i - 1)], p1 = v[i], p2 = v[i + 1], p3 = v[Math.min(8, i + 2)];
         return 0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u + (3 * p1 - p0 - 3 * p2 + p3) * u * u * u);
       }
-      var stepTrack = CYL.tx[5] * P / (P - CYL.tz[5]);   // baan-px van het midden tot plek 1
+      // ---- TIJDELIJK (BORING kiest een slider, 2026-11-26): ?lineup=<variant> op staging toont een andere beweging met een keuzebalk
+      // rechtsonder (toetsen 1-7). Zonder ?lineup= blijft het de cilinder. Haal dit weg zodra er gekozen is. ----
+      var clampV = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+      var cyl = function (d) { return { tx: cr(CYL.tx, d), ty: 0, tz: cr(CYL.tz, d), ry: cr(CYL.ry, d), rz: 0, w: cr(CYL.w, d), opacity: cr(CYL.opacity, d), dim: cr(CYL.dim, d) }; };
+      var VARIANTS = {
+        cilinder: { name: 'Cilinder (nu live)', at: cyl },
+        binnenkant: { name: 'Cilinder binnenkant (hol, andersom gedraaid)', at: function (d) {
+          var c = cyl(d), a = Math.min(Math.abs(d), 3.2);
+          return Object.assign(c, { tz: 140 * Math.pow(a, 1.1), tx: c.tx * 0.95, ry: -c.ry * 0.85, dim: c.dim * 0.8 }); } },
+        coverflow: { name: 'Coverflow', at: function (d) {
+          var a = Math.abs(d), s = d < 0 ? -1 : 1, near = clampV(a, 0, 1);
+          return { tx: s * (near * 430 + Math.max(0, a - 1) * 150), ty: 0, tz: -near * 260 - Math.max(0, a - 1) * 40, ry: -s * near * 62, rz: 0, w: 480,
+            opacity: clampV(4.3 - a, 0, 1), dim: clampV(near * 0.25 + Math.max(0, a - 1) * 0.12, 0, 0.7) }; } },
+        vlak: { name: 'Vlakke rij (kleiner naar de zijkant)', at: function (d) {
+          var a = Math.abs(d), s = d < 0 ? -1 : 1;
+          return { tx: s * (a * 470 - Math.max(0, a - 1) * 80), ty: 0, tz: -Math.min(a, 1) * 520 - Math.max(0, a - 1) * 200, ry: 0, rz: 0, w: 480,
+            opacity: clampV(4 - a, 0, 1), dim: clampV(a * 0.25, 0, 0.7) }; } },
+        golf: { name: 'Golf', at: function (d) {
+          var a = Math.abs(d), s = d < 0 ? -1 : 1;
+          return { tx: d * 400, ty: Math.sin(d * 1.1) * 70 + a * 30, tz: -a * 330, ry: 0, rz: d * 4, w: 480,
+            opacity: clampV(4.2 - a, 0, 1), dim: clampV(a * 0.2, 0, 0.6) }; } },
+        stapel: { name: 'Stapel (kaarten op elkaar)', at: function (d) {
+          if (d < 0) { var o = clampV(-d, 0, 1); return { tx: -o * 900, ty: o * 40, tz: 0, ry: 0, rz: -o * 14, w: 480, opacity: 1 - clampV(-d * 1.2, 0, 1), dim: 0 }; }
+          return { tx: d * 70, ty: -d * 18, tz: -d * 160, ry: 0, rz: d * 3, w: 480, opacity: clampV(4.5 - d, 0, 1), dim: clampV(d * 0.18, 0, 0.7) }; } },
+        spiraal: { name: 'Draaiende schijf (zijkanten zakken weg)', at: function (d) {
+          var ang = clampV(d, -3.5, 3.5) * 24 * Math.PI / 180, R = 1500;
+          return { tx: Math.sin(ang) * R * 0.75, ty: (1 - Math.cos(ang)) * R * 0.55, tz: -(1 - Math.cos(ang)) * 300, ry: 0, rz: ang * 180 / Math.PI * 0.9, w: 480,
+            opacity: clampV(4 - Math.abs(d), 0, 1), dim: clampV(Math.abs(d) * 0.15, 0, 0.6) }; } }
+      };
+      var variantKey = new URLSearchParams(location.search).get('lineup') || 'cilinder', showBar = new URLSearchParams(location.search).has('lineup');
+      if (!VARIANTS[variantKey]) variantKey = 'cilinder';
+      var VAR = VARIANTS[variantKey];
+      if (showBar) (function () {   // keuzebalk rechtsonder
+        var bar = document.createElement('div');
+        bar.setAttribute('style', 'position:fixed;z-index:99999;right:16px;bottom:16px;display:flex;flex-wrap:wrap;gap:6px;max-width:560px;justify-content:flex-end;font:600 12px/1 system-ui,sans-serif');
+        Object.keys(VARIANTS).forEach(function (key, i) {
+          var b = document.createElement('a');
+          b.textContent = (i + 1) + ' ' + VARIANTS[key].name;
+          var u = new URL(location.href); u.searchParams.set('lineup', key); u.hash = 'lineup';
+          b.href = u.toString();
+          b.setAttribute('style', 'padding:8px 10px;border-radius:99px;text-decoration:none;' + (key === variantKey ? 'background:#f4eae1;color:#0c0c0c' : 'background:rgba(12,12,12,.75);color:#f4eae1'));
+          bar.appendChild(b);
+        });
+        document.body.appendChild(bar);
+        document.addEventListener('keydown', function (e) {
+          var n = parseInt(e.key, 10), keys = Object.keys(VARIANTS);
+          if (n >= 1 && n <= keys.length && !e.metaKey && !e.ctrlKey && !(e.target.closest && e.target.closest('input,textarea'))) location.href = bar.children[n - 1].href;
+        });
+      })();
+      var s1 = VAR.at(1);
+      var s1 = VAR.at(1);
+      var stepTrack = Math.max(260, Math.abs(s1.tx) * P / (P - s1.tz));   // baan-px van het midden tot plek 1 (minimaal 260, anders slepen te gevoelig)
 
       // ---- ring: de kaarten van de gekozen dag, herhaald tot minstens 10 (kopieën zijn verborgen voor schermlezers) ----
       var ring = [], cards = [], pos = 0, lastPos = NaN, active = -1, tween = null, target = 0, settled = true, k = 1;
@@ -614,14 +696,14 @@
         lastPos = pos;
         var n = cards.length;
         cards.forEach(function (c, i) {
-          var d = wrap(i - pos, n), a = Math.abs(d), op = Math.max(0, Math.min(1, cr(CYL.opacity, d))), st = c.style;
+          var d = wrap(i - pos, n), a = Math.abs(d), S = VAR.at(d), op = Math.max(0, Math.min(1, S.opacity)), st = c.style;
           st.visibility = op <= 0 ? 'hidden' : '';
           if (op <= 0) return;
-          st.transform = 'translate3d(' + cr(CYL.tx, d) + 'px, 0, ' + cr(CYL.tz, d) + 'px) rotateY(' + cr(CYL.ry, d) + 'deg)';
+          st.transform = 'translate3d(' + S.tx + 'px, ' + S.ty + 'px, ' + S.tz + 'px) rotateY(' + S.ry + 'deg)' + (S.rz ? ' rotateZ(' + S.rz + 'deg)' : '');
           st.opacity = op;
-          st.clipPath = 'inset(0 ' + Math.max(0, 480 - cr(CYL.w, d)) / 2 + 'px round 16px)';
+          st.clipPath = 'inset(0 ' + Math.max(0, 480 - S.w) / 2 + 'px round 16px)';
           st.zIndex = 100 - Math.round(a * 10);
-          st.setProperty('--bgf-dim', Math.max(0, Math.min(1, cr(CYL.dim, d))).toFixed(3));
+          st.setProperty('--bgf-dim', Math.max(0, Math.min(1, S.dim)).toFixed(3));
           // de foto schuift binnen de kaart iets tegen de draairichting in (individuele translate: de hover-schaal blijft transform)
           if (!reduce.matches) st.setProperty('--bgf-shift', (Math.max(-3, Math.min(3, d)) * -2).toFixed(2) + '%');
         });
@@ -846,6 +928,72 @@
       .to('.loader_logo-icon', { yPercent: -110, ease: 'expo.out', duration: 0.6 }, 0.2);
   }, homeLoader ? ['CustomEase'] : []);
 
+  /* data-bgf-curve (Section - Marquee): de band hangt als slinger door (BORING 2026-11-26, naar de marquee onder de hero van
+     two26.studio). De sectie wordt geknipt tot een dikke gebogen band (clip-path: path(), opnieuw bij resize), de tekst loopt over
+     dezelfde lijn in een SVG-textPath. De gewone rij (data-bgf-marquee) blijft voor schermlezers (.bgf-sr) en levert tekst, lettertype
+     en tussenruimte. data-bgf-marquee laat de tekst lopen met section.bgfCurve.offset(pos); bij reduced motion staat hij stil. */
+  each('[data-bgf-curve]', function (section) {
+    var track = section.querySelector('[data-bgf-marquee]');
+    var group = track && track.querySelector('[data-bgf-marquee-item]');
+    if (!group) return;
+    var NS = 'http://www.w3.org/2000/svg', id = 'bgf-curve-path-' + (document.querySelectorAll('.bgf-curve').length + 1);
+    var parts = [].map.call(group.children, function (c) { return c.textContent.trim(); }).filter(Boolean);
+    var svg = document.createElementNS(NS, 'svg'), path = document.createElementNS(NS, 'path');
+    var text = document.createElementNS(NS, 'text'), tp = document.createElementNS(NS, 'textPath');
+    svg.setAttribute('class', 'bgf-curve');
+    svg.setAttribute('aria-hidden', 'true');
+    path.id = id;
+    path.setAttribute('fill', 'none');
+    tp.setAttribute('href', '#' + id);
+    text.setAttribute('dominant-baseline', 'central');
+    text.appendChild(tp); svg.appendChild(path); svg.appendChild(text);
+    section.appendChild(svg);
+    var cs = getComputedStyle(group), groupLen = 0, pos = 0;
+    track.classList.add('bgf-sr');
+    function fill(reps) {
+      tp.textContent = '';
+      var gap = parseFloat(cs.columnGap) || 0;
+      for (var r = 0; r < reps; r++) parts.forEach(function (t) {
+        var span = document.createElementNS(NS, 'tspan');
+        span.setAttribute('dx', gap);
+        span.textContent = t;
+        tp.appendChild(span);
+      });
+    }
+    function build() {
+      ['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'textTransform'].forEach(function (k) { text.style[k] = cs[k]; });
+      text.setAttribute('fill', cs.color);
+      var fs = parseFloat(cs.fontSize), W = section.clientWidth;
+      var T = fs * 2.9;                         // dikte van de band (zoals de rechte band: 120px bij 41px tekst)
+      var sag = Math.max(T * 0.7, W * 0.08);    // zo ver hangt het midden door
+      var y0 = T * 0.62, H = y0 + sag + T * 0.62;
+      section.style.height = H + 'px';
+      var c = y0 + sag * 4 / 3;
+      path.setAttribute('d', 'M' + (-0.06 * W) + ',' + y0 + ' C' + (0.28 * W) + ',' + c + ' ' + (0.72 * W) + ',' + c + ' ' + (1.06 * W) + ',' + y0);
+      // band = de lijn met dikte T: punten links en rechts van de lijn (loodrecht), heen langs de bovenrand en terug langs de onderrand
+      var len = path.getTotalLength(), n = 64, top = [], bottom = [];
+      for (var i = 0; i <= n; i++) {
+        var l = len * i / n, p = path.getPointAtLength(l), q = path.getPointAtLength(Math.min(len, l + 1)), o = path.getPointAtLength(Math.max(0, l - 1));
+        var dx = q.x - o.x, dy = q.y - o.y, d = Math.hypot(dx, dy) || 1, nx = -dy / d * T / 2, ny = dx / d * T / 2;
+        top.push((p.x + nx).toFixed(1) + ',' + (p.y + ny).toFixed(1));
+        bottom.unshift((p.x - nx).toFixed(1) + ',' + (p.y - ny).toFixed(1));
+      }
+      section.style.clipPath = "path('M" + top.concat(bottom).join(' L') + " Z')";
+      fill(1);
+      groupLen = text.getComputedTextLength() || 1;
+      fill(Math.ceil(len / groupLen) + 2);
+      section.bgfCurve.offset(pos);
+    }
+    section.bgfCurve = {
+      offset: function (p) { pos = p; tp.setAttribute('startOffset', (-(p + 1) * groupLen).toFixed(1)); },
+      get groupLen() { return groupLen; }
+    };
+    build();
+    document.fonts.ready.then(build);
+    var raf = 0;
+    window.addEventListener('resize', function () { cancelAnimationFrame(raf); raf = requestAnimationFrame(build); });
+  });
+
   /* data-bgf-marquee (Section - Marquee, 2027): eindeloze rij die per frame soepel bijgestuurd wordt: snel scrollen geeft vaart,
      omhoog scrollen draait de richting om, daarna zakt hij rustig terug naar zijn tempo. De glasstroken van het verloop eronder
      (data-bgf-gradient op de sectie) schuiven dezelfde kant op maar trager (35%): parallax. Reduced motion: stil. */
@@ -856,7 +1004,8 @@
       var band = track.closest('[data-bgf-gradient]') || track;
       var period = 40; // seconden per groep bij rust
       var pos = 0, speed = 1, dir = 1, boost = 0, shift = 0, lastY = window.scrollY, visible = true, itemW = 0, canvasW = 0;
-      var measure = function () { var c = band.querySelector('canvas.bgf-gradient'); itemW = items[0].offsetWidth; canvasW = c ? c.clientWidth : 0; };
+      var curve = band.bgfCurve || null;   // gebogen band (data-bgf-curve): de tekst loopt over de lijn in plaats van de rij te schuiven
+      var measure = function () { var c = band.querySelector('canvas.bgf-gradient'); itemW = curve ? curve.groupLen : items[0].offsetWidth; canvasW = c ? c.clientWidth : 0; };
       measure(); window.addEventListener('resize', measure);
       new IntersectionObserver(function (entries) { visible = entries[0].isIntersecting; }).observe(track);
       gsap.ticker.add(function (time, deltaMs) {
@@ -869,12 +1018,12 @@
         if (!visible) return;
         var step = speed * dt / period;
         pos = ((pos + step) % 1 + 1) % 1;
-        gsap.set(items, { xPercent: -pos * 100, force3D: true });
+        if (curve) curve.offset(pos); else gsap.set(items, { xPercent: -pos * 100, force3D: true });
         var g = band.bgfGradient;
         if (g && !canvasW) measure();   // de canvas komt pas na het laden van gradient.js
         if (g && canvasW) {
           var strips = (g.state.stripsMin + g.state.stripsMax) / 2;
-          shift += step * itemW * 0.35 / (canvasW / strips);
+          shift += step * (curve ? curve.groupLen : itemW) * 0.35 / (canvasW / strips);
           g.setStripShift(shift);
         }
       });
