@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.css v1.18.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
+/* Bontgenoten Festival site.css v1.19.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
 
 /* Vloeiende root-fontgrootte: 1rem = 16px op het ontwerpformaat (1440 x 900) en daaronder. Groter alleen als het scherm
    zowel breder als hoger is, tot 18px; zo past een sectie ook op een breed maar laag scherm.
@@ -11,6 +11,10 @@ body {
   -webkit-font-smoothing: antialiased !important;
   -moz-osx-font-smoothing: grayscale !important;
 }
+
+/* Knoplijnen (.button_background-line, FAQ-tabs): elke lijn 1px breder dan zijn 20%, zodat er tussen twee lijnen geen haarlijn van de
+   achtergrond doorschemert (afronding op halve pixels, BORING 2026-11-27); de laatste steekt 1px uit en de knop knipt hem af */
+.button_background-line, [data-bgf-fill-line] { width: calc(20% + 1px); margin-right: -1px; flex-shrink: 0; }
 
 /* Rich text: geen marge boven het eerste en onder het laatste element */
 .w-richtext > :first-child { margin-top: 0; }
@@ -50,6 +54,9 @@ html.bgf-nav-open { overflow: hidden; }
 [data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_wrapper { border-color: var(--_theme---action--primary); }   /* variant Creme hover-rand: de lijnen zijn de achtergrond, de rand kleurt mee */
 [data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_text { color: var(--_theme---action--contrast); text-shadow: 0 1em 0 var(--_theme---action--primary); }
 [data-bgf-nav]:not([data-bgf-nav-on-dark]) .nav_actions .button_background-line { background-color: var(--_theme---action--primary); }
+/* bij de wissel schuiven de lijnen in de nieuwe kleur over de oude (site.js); tekst en rand lopen mee */
+.nav_actions .button_wrapper { transition: border-color 0.35s ease; }
+.nav_actions .button_text { transition: color 0.35s ease 0.05s, text-shadow 0.35s ease 0.05s; }
 
 /* data-bgf-tabs (Section - FAQ): de actieve tab is gevuld (zwart met creme tekst). Hover = de knop-hover: lijnen vullen (site.js)
    en de tekst schuift naar zijn creme kopie (text-shadow), alleen desktop met muis en niet op de actieve tab */
@@ -160,9 +167,10 @@ html.bgf-cursor-on .video_hint { display: none; }
    Suisse BP Int'l boven 0.414em, onder 0.25em; TAN - Waltzing Mathilde boven 0.524em, onder 0.476em.
    Niet getrimd, met reden: knopteksten en FAQ-tabs (de tekst schuift met translateY(-100%) naar een kopie op 1em), de galerijtitel
    (het live verloop knipt op de letters en heeft de padding nodig), de verticale zijteksten van de hero en tekst direct in een
-   flex-knop (FAQ-vraag, dagknoppen: hun padding is de maat). */
+   flex-knop (FAQ-vraag, dagknoppen: hun padding is de maat), en de FAQ-antwoorden (rich text in een klappaneel dat knipt: getrimde
+   alinea's schoven over elkaar en de bovenkant van de eerste regel viel weg, BORING 2026-11-27). */
 :where(.hero_date, .lineup_title, .lineup_counter, .lineup_info-name, .lineup_info-tag, .lineup_info-genre, .quote_eyebrow, .quote_text,
-  .about_eyebrow, .about_title, .about_text > *, .faq_eyebrow, .faq_title, .faq_answer-text > *, .faq-contact_title, .logo-wall_heading,
+  .about_eyebrow, .about_title, .about_text > *, .faq_eyebrow, .faq_title, .faq-contact_title, .logo-wall_heading,
   .cta_location, .cta_city, .cta_time, .cta_day, .cta_date, .cta_title, .footer_heading, .footer_text, .footer_detail, .footer_legal-link) {
   --bgf-trim-top: 0.414em; --bgf-trim-bottom: 0.25em;
   text-box: trim-both cap alphabetic;
@@ -170,13 +178,36 @@ html.bgf-cursor-on .video_hint { display: none; }
 :where(.hero_date, .quote_text, .cta_date, .footer_heading) { --bgf-trim-top: 0.524em; --bgf-trim-bottom: 0.476em; }
 @supports not (text-box: trim-both cap alphabetic) {
   :where(.hero_date, .lineup_title, .lineup_counter, .lineup_info-name, .lineup_info-tag, .lineup_info-genre, .quote_eyebrow, .quote_text,
-    .about_eyebrow, .about_title, .about_text > *, .faq_eyebrow, .faq_title, .faq_answer-text > *, .faq-contact_title, .logo-wall_heading,
+    .about_eyebrow, .about_title, .about_text > *, .faq_eyebrow, .faq_title, .faq-contact_title, .logo-wall_heading,
     .cta_location, .cta_city, .cta_time, .cta_day, .cta_date, .cta_title, .footer_heading, .footer_text, .footer_detail, .footer_legal-link)::before {
     content: ""; display: table; margin-bottom: calc(var(--bgf-trim-top) - 0.5lh);
   }
   :where(.hero_date, .lineup_title, .lineup_counter, .lineup_info-name, .lineup_info-tag, .lineup_info-genre, .quote_eyebrow, .quote_text,
-    .about_eyebrow, .about_title, .about_text > *, .faq_eyebrow, .faq_title, .faq_answer-text > *, .faq-contact_title, .logo-wall_heading,
+    .about_eyebrow, .about_title, .about_text > *, .faq_eyebrow, .faq_title, .faq-contact_title, .logo-wall_heading,
     .cta_location, .cta_city, .cta_time, .cta_day, .cta_date, .cta_title, .footer_heading, .footer_text, .footer_detail, .footer_legal-link)::after {
     content: ""; display: table; margin-top: calc(var(--bgf-trim-bottom) - 0.5lh);
   }
 }
+
+/* Line-up pijltjes (BORING 2026-11-27): met muis vult de knop zich van onder (zoals de knoppen) en schuift de pijl in zijn richting */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .lineup_arrow { position: relative; overflow: hidden; isolation: isolate; transition: color 0.35s ease; }
+  .lineup_arrow::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background-color: var(--_theme---action--primary); translate: 0 101%; transition: translate 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+  .lineup_arrow:hover { color: var(--_theme---action--contrast); }
+  .lineup_arrow:hover::before { translate: 0 0; }
+  .lineup_arrow-icon { transition: translate 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+  [data-bgf-lineup-prev]:hover .lineup_arrow-icon { translate: -0.2em 0; }
+  [data-bgf-lineup-next]:hover .lineup_arrow-icon { translate: 0.2em 0; }
+}
+
+/* TIJDELIJK (testversie ?about=centered, site.js): Section - About gecentreerd naar Figma 646:1933, beelden scheef links en rechts */
+@media (min-width: 992px) {
+  [data-bgf-about-test] .about_component { position: relative; display: block; }
+  [data-bgf-about-test] .about_content { max-width: 32rem; margin: 0 auto; text-align: center; display: flex; flex-direction: column; align-items: center; }
+  [data-bgf-about-test] .about_title { max-width: 27rem; }
+  [data-bgf-about-test] .about_media { position: absolute; inset: 0; width: auto; height: auto; pointer-events: none; }
+  [data-bgf-about-test] .about_photo-1, [data-bgf-about-test] .about_photo-2 { position: absolute; width: 20.5vw; max-width: 18.5rem; aspect-ratio: 296 / 376; height: auto; margin: 0; }
+  [data-bgf-about-test] .about_photo-1 { left: -5vw; top: 0; right: auto; bottom: auto; rotate: -4deg; }
+  [data-bgf-about-test] .about_photo-2 { right: -5vw; top: -1.5rem; left: auto; bottom: auto; rotate: 5deg; }
+}
+[data-bgf-about-test] video.about_photo-image { display: block; width: 100%; height: 100%; object-fit: cover; }

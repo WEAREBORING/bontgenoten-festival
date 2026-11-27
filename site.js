@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.18.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.19.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -14,6 +14,35 @@
   // plek op de pagina zonder transforms (offsetTop); de scheve kaarten (data-bgf-card) zouden getBoundingClientRect verschuiven
   function docTop(n) { var y = 0; for (; n; n = n.offsetParent) y += n.offsetTop; return y; }
   function ready(fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
+  /* Zachte sticky (BORING 2026-11-27): sticky.js = @alpacka/sticky 0.2.1 uit de skill jesperlandberg/alpacka@sticky (.claude/skills/sticky),
+     alleen de types eruit; staat naast site.js en wordt alleen geladen waar een sticky of pin is. Zonder muis of met reduced motion
+     doet hij niets (gewone sticky). */
+  var stickyMod = null;
+  function loadSticky() {
+    if (!stickyMod) stickyMod = gradientSrc ? import(gradientSrc.replace(/gradient(\.min)?\.js/, 'sticky$1.js')) : Promise.reject(new Error('geen pad naar sticky.js'));
+    return stickyMod;
+  }
+  // Voor een pin van ScrollTrigger (geen echte sticky): dezelfde curve als de skill ("virtual scroll"), als losse translate op el.
+  // start() = scrollstand waar de pin begint, travel() = hoe lang hij duurt; landOnly: alleen het afremmen, niet het vertrek.
+  // Geeft een belofte met de ScrollTrigger (om op te ruimen).
+  function easePin(el, start, travel, landOnly) {
+    if (!finePointer.matches) return Promise.reject(new Error('touch: gewone pin'));   // zoals de skill: op touch loopt het niet gelijk op
+    return loadSticky().then(function (m) {
+      var c = null, s0 = 0, clear = function () { el.style.translate = ''; };
+      var write = function (self) {
+        var x = self.scroll() - s0, y = c && !(landOnly && x > c.into[1]) ? c.at(x) : 0;
+        el.style.translate = Math.abs(y) < 0.05 ? '' : '0 ' + y.toFixed(2) + 'px';
+      };
+      window.ScrollTrigger.addEventListener('refreshInit', clear);
+      var st = window.ScrollTrigger.create({ trigger: el,
+        start: function () { s0 = start(); c = m.curve({ travel: travel(), span: window.innerHeight * 0.4, ease: 'power2', lead: s0 }); return s0 + c.into[0]; },
+        end: function () { return s0 + (landOnly ? c.into[1] : c.outof[1]); },
+        onUpdate: write, onRefresh: write, onLeave: clear, onLeaveBack: clear });
+      var kill = st.kill.bind(st);
+      st.kill = function () { window.ScrollTrigger.removeEventListener('refreshInit', clear); clear(); kill(); };
+      return st;
+    });
+  }
 
   /* data-bgf-year: zet het huidige jaar (bijvoorbeeld het copyright in de footer) */
   each('[data-bgf-year]', function (el) { el.textContent = new Date().getFullYear(); });
@@ -228,7 +257,8 @@
     function layout() {
       // het slot van Webflow zet de foto's in een kale <div> (site.css: display contents)
       var root = list.children.length === 1 && !list.children[0].className ? list.children[0] : list;
-      var items = [].slice.call(root.children), k = list.clientWidth / 1440, bottom = 0;
+      var items = [].slice.call(root.children), k = list.clientWidth / 1440, bottom = 0, spread = 0;
+      var host = list.closest('[data-bgf-parallax]'), distance = host ? num(host, 'data-bgf-parallax', 250) : 0;
       items.forEach(function (el, i) {
         if (!wide.matches) { el.style.left = el.style.top = el.style.width = el.style.aspectRatio = ''; el.removeAttribute('data-bgf-speed'); return; }
         var p = COLLAGE[i % 7], block = Math.floor(i / 7), portrait = p.w < 300, h = portrait ? p.w * 4 / 3 : p.w * 2 / 3;
@@ -239,11 +269,20 @@
         el.style.aspectRatio = portrait ? '3 / 4' : '3 / 2';
         el.setAttribute('data-bgf-speed', p.s);
         bottom = Math.max(bottom, y + h);
+        spread = Math.max(spread, Math.abs(p.s - 1) * distance);
       });
-      list.style.height = wide.matches && items.length ? ((bottom + 80) * k) + 'px' : '';
+      // ruimte voor de parallax: een trage foto zakt tot `spread` px onder zijn plek (data-bgf-parallax), anders knipt de sectie hem af
+      list.style.height = wide.matches && items.length ? ((bottom + 80) * k + (reduce.matches ? 0 : spread)) + 'px' : '';
     }
     layout();
     window.addEventListener('resize', layout);
+    // de titel (CSS sticky in Webflow) landt en vertrekt zacht: sticky-skill, alleen met muis en zonder reduced motion (doet de module zelf)
+    var title = list.parentNode.querySelector('.gallery_title');
+    if (title && finePointer.matches && !reduce.matches) withGsap(function (gsap) {
+      loadSticky().then(function (m) {
+        m.sticky(title, { ticker: function (fn) { gsap.ticker.add(fn); return function () { gsap.ticker.remove(fn); }; } });
+      }).catch(function (e) { console.error('site.js:', e); });
+    });
   });
 
   /* data-bgf-parallax (Section - Gallery): kinderen met data-bgf-speed bewegen anders mee met scrollen.
@@ -422,26 +461,20 @@
   }, ['ScrollTrigger']);
 
   /* data-bgf-lock (Section - Video): de sectie klikt zacht vast bovenaan het scherm en blijft staan terwijl de volgende sectie
-     eroverheen schuift (zoals de "smooth sticky" van extrema.be). Zacht: over de laatste 40% schermhoogte loopt de sectie eerst iets
-     voor en remt dan af tot stilstand bovenaan (losse translate, de kaart-transform blijft van data-bgf-card); daarna een pin tot de
-     bovenkant van de volgende sectie bovenaan is. Vanaf 768px, zonder reduced motion. */
+     eroverheen schuift (zoals de "smooth sticky" van extrema.be). Zacht: de curve van de sticky-skill (easePin) laat de sectie over 40%
+     schermhoogte afremmen tot stilstand bovenaan (losse translate, de kaart-transform blijft van data-bgf-card); daarna een pin tot de
+     bovenkant van de volgende sectie bovenaan is. Vanaf 768px, zonder reduced motion; het afremmen alleen met muis. */
   if (document.querySelector('[data-bgf-lock]') && !reduce.matches) withGsap(function (gsap) {
     gsap.matchMedia().add('(min-width: 768px)', function () {
       var locks = [].slice.call(document.querySelectorAll('[data-bgf-lock]')).filter(function (el) { return el.nextElementSibling; });
-      var clear = function () { locks.forEach(function (el) { el.style.translate = ''; }); };
-      window.ScrollTrigger.addEventListener('refreshInit', clear);
+      var eased = [];
       locks.forEach(function (el) {
-        // u = 1 → 0 over de aanloop; stand t.o.v. normaal scrollen: -D·u·(1-u)², dus bovenaan snelheid 0 en aan het begin gewoon mee
-        var ease = function (self) {
-          var u = 1 - self.progress, D = window.innerHeight * 0.4, y = -D * u * (1 - u) * (1 - u);
-          el.style.translate = Math.abs(y) < 0.5 ? '' : '0 ' + y.toFixed(1) + 'px';
-        };
         var next = el.nextElementSibling;
-        window.ScrollTrigger.create({ trigger: el, start: function () { return docTop(el) - window.innerHeight * 0.4; }, end: function () { return docTop(el); },
-          onUpdate: ease, onLeave: clear, onLeaveBack: clear });
+        // afremmen naar de bovenkant met de curve van de sticky-skill (landing over 40% schermhoogte, begint op scrollsnelheid)
+        eased.push(easePin(el, function () { return docTop(el); }, function () { return docTop(next) - docTop(el); }, true));
         window.ScrollTrigger.create({ trigger: el, start: function () { return docTop(el); }, end: function () { return docTop(next); }, pin: true, pinSpacing: false });
       });
-      return function () { window.ScrollTrigger.removeEventListener('refreshInit', clear); clear(); };
+      return function () { eased.forEach(function (p) { p.then(function (st) { st.kill(); }, function () {}); }); };
     });
   }, ['ScrollTrigger']);
 
@@ -471,10 +504,10 @@
             last[i] = t;
             if (t === 0) { w.style.opacity = 0.15; w.style.color = ''; return; }
             if (t === 1) { w.style.opacity = ''; w.style.color = ''; return; }
-            // c = van kleur naar eigen kleur (pas in de tweede helft); de letters gaan van doorzichtig naar dekkend in de jubileumkleur
-            var c = clamp01((t - 0.5) / 0.5);
-            w.style.opacity = Math.max(0.15, clamp01(t / 0.35));
-            w.style.color = 'rgba(' + mix(glows[i], ink, c).join(', ') + ', ' + clamp01((t - 0.1) / 0.4).toFixed(3) + ')';
+            // van het vage grijs meteen naar de jubileumkleur (dekking 15% → 100%), daarna naar de eigen kleur; nooit doorzichtiger dan 15% (BORING 2026-11-27)
+            var a = clamp01(t / 0.35), c = clamp01((t - 0.5) / 0.5);
+            w.style.opacity = (0.15 + 0.85 * a).toFixed(3);
+            w.style.color = 'rgb(' + mix(mix(ink, glows[i], a), ink, c).join(', ') + ')';
           });
         }
         draw(0);
@@ -485,6 +518,12 @@
           st.onUpdate = function (self) { draw(self.progress * (words.length + soft)); };
           st.onRefresh = st.onUpdate;
           window.ScrollTrigger.create(st);
+          // de pin landt en vertrekt zacht (sticky-skill), alleen met muis
+          if (ctx.conditions.wide) {
+            var eased = easePin(section, function () { return docTop(section); }, function () { return window.innerHeight; }, false);
+            eased.catch(function () {});
+            return function () { eased.then(function (t) { t.kill(); }, function () {}); };
+          }
         });
         // de pin komt pas na het laden van de fonts: triggers verderop opnieuw meten
         window.ScrollTrigger.sort(); window.ScrollTrigger.refresh();
@@ -560,6 +599,7 @@
         else toggle.removeAttribute('aria-pressed');   // zonder autoplay is het een afspeelknop
       }
       if (hint) hint.textContent = text;
+      document.dispatchEvent(new CustomEvent('bgf:cursor'));   // cursortekst en -teken direct mee, niet pas bij de volgende muisbeweging
     }
     video.addEventListener('playing', function () { set('data-player-activated', true); set('data-player-status', 'playing'); sync(); });
     video.addEventListener('pause', function () { set('data-player-status', 'paused'); sync(); });
@@ -571,6 +611,7 @@
       if (autoplay) { video.muted = !video.muted; if (video.paused) play(); }
       else if (video.paused) { video.muted = false; play(); }
       else pause();
+      sync();   // knop, schermlezer en cursor meteen bij, niet pas na volumechange (BORING 2026-11-27: reageerde niet altijd op de eerste klik)
     });
 
     // in beeld: laden en (autoplay) spelen; uit beeld: pauzeren. Het geluid blijft zoals de bezoeker het zette.
@@ -635,6 +676,16 @@
       var proxy = document.createElement('div');
       var cur = function () { return -gsap.getProperty(proxy, 'x') / stepPx(); };
       function build(day) {
+        // een lopende draai of worp stopt; elke kaart begint schoon (een uitgefade kaart van de vorige dag bleef anders
+        // onzichtbaar, en kopieën namen die inline stijl over: gaten in de lus na filteren)
+        if (tween) { tween.kill(); tween = null; }
+        if (drag && drag.tween) drag.tween.kill();
+        artists.forEach(function (a) {
+          gsap.killTweensOf(a.node); gsap.set(a.node, { '--bgf-out-x': '0px' });
+          a.node.removeAttribute('data-bgf-active');
+          var f = a.node.querySelector('.lineup_card') || a.node;
+          gsap.killTweensOf(f); gsap.set(f, { opacity: 1 });
+        });
         cards.forEach(function (c) { if (c.hasAttribute('data-bgf-lineup-clone')) c.remove(); });
         var pick = artists.filter(function (a) { return day === 'all' || a.day === day; });
         artists.forEach(function (a) { a.node.hidden = pick.indexOf(a) < 0; if (a.node.hidden) a.node.removeAttribute('data-bgf-slot'); });
@@ -895,6 +946,27 @@
      two26.studio). De sectie wordt geknipt tot een dikke gebogen band (clip-path: path(), opnieuw bij resize), de tekst loopt over
      dezelfde lijn in een SVG-textPath. De gewone rij (data-bgf-marquee) blijft voor schermlezers (.bgf-sr) en levert tekst, lettertype
      en tussenruimte. data-bgf-marquee laat de tekst lopen met section.bgfCurve.offset(pos); bij reduced motion staat hij stil. */
+  /* TIJDELIJK (BORING 2026-11-27, weghalen na de keuze): vormen van de band om uit te kiezen op staging met ?marquee=swag|arc|double|s|wave|tilt.
+     Elke vorm is y(u) over de breedte (u 0..1, de lijn loopt 6% buiten beeld door), geschaald met A; de band volgt de lijn. */
+  var CURVE_FN = {
+    swag: function (u) { return Math.sin(Math.PI * u); },                     // één slinger die doorhangt (v1.16.0)
+    arc: function (u) { return -Math.sin(Math.PI * u); },                      // boog omhoog (two26)
+    double: function (u) { return (1 - Math.cos(4 * Math.PI * u)) / 2; },      // twee slingers
+    s: function (u) { return Math.sin(2 * Math.PI * u) / 2; },                 // S-bocht
+    wave: function (u) { return Math.sin(3 * Math.PI * u) / 4; },              // zachte golf
+    tilt: function (u) { return (u - 0.5) / 2; }                               // rechte schuine band
+  };
+  var curveShape = (window.location.search.match(/[?&]marquee=(\w+)/) || [])[1];
+  if (!CURVE_FN[curveShape]) curveShape = 'swag';
+  var CURVES = {};
+  Object.keys(CURVE_FN).forEach(function (name) {
+    CURVES[name] = function (W, T) {
+      var A = Math.max(T * 0.7, W * 0.08), pts = [], min = Infinity, max = -Infinity;
+      for (var i = 0; i <= 96; i++) { var u = i / 96, y = A * CURVE_FN[name](u); pts.push([-0.06 * W + 1.12 * W * u, y]); min = Math.min(min, y); max = Math.max(max, y); }
+      var top = T * 0.62 - min;
+      return { H: max - min + T * 1.24, d: 'M' + pts.map(function (p) { return p[0].toFixed(1) + ',' + (p[1] + top).toFixed(1); }).join(' L') };
+    };
+  });
   each('[data-bgf-curve]', function (section) {
     var track = section.querySelector('[data-bgf-marquee]');
     var group = track && track.querySelector('[data-bgf-marquee-item]');
@@ -928,11 +1000,9 @@
       text.setAttribute('fill', cs.color);
       var fs = parseFloat(cs.fontSize), W = section.clientWidth;
       var T = fs * 2.9;                         // dikte van de band (zoals de rechte band: 120px bij 41px tekst)
-      var sag = Math.max(T * 0.7, W * 0.08);    // zo ver hangt het midden door
-      var y0 = T * 0.62, H = y0 + sag + T * 0.62;
-      section.style.height = H + 'px';
-      var c = y0 + sag * 4 / 3;
-      path.setAttribute('d', 'M' + (-0.06 * W) + ',' + y0 + ' C' + (0.28 * W) + ',' + c + ' ' + (0.72 * W) + ',' + c + ' ' + (1.06 * W) + ',' + y0);
+      var shape = CURVES[curveShape](W, T);
+      section.style.height = shape.H + 'px';
+      path.setAttribute('d', shape.d);
       // band = de lijn met dikte T: punten links en rechts van de lijn (loodrecht), heen langs de bovenrand en terug langs de onderrand
       var len = path.getTotalLength(), n = 64, top = [], bottom = [];
       for (var i = 0; i <= n; i++) {
@@ -942,13 +1012,20 @@
         bottom.unshift((p.x - nx).toFixed(1) + ',' + (p.y - ny).toFixed(1));
       }
       section.style.clipPath = "path('M" + top.concat(bottom).join(' L') + " Z')";
-      fill(1);
-      groupLen = text.getComputedTextLength() || 1;
+      // lengte van één groep = waar de tweede groep begint, gemeten op een rechte regel: getComputedTextLength telt de dx-tussenruimtes
+      // niet (altijd) mee, dan sprong de tekst bij het rondgaan (BORING 2026-11-27)
+      fill(2);
+      var probe = text.cloneNode(true), n1 = parts.join('').length;
+      probe.textContent = '';
+      [].forEach.call(tp.childNodes, function (s) { probe.appendChild(s.cloneNode(true)); });
+      svg.appendChild(probe);
+      groupLen = (probe.getStartPositionOfChar(n1).x - probe.getStartPositionOfChar(0).x) || 1;
+      svg.removeChild(probe);
       fill(Math.ceil(len / groupLen) + 2);
       section.bgfCurve.offset(pos);
     }
     section.bgfCurve = {
-      offset: function (p) { pos = p; tp.setAttribute('startOffset', (-(p + 1) * groupLen).toFixed(1)); },
+      offset: function (p) { pos = p; tp.setAttribute('startOffset', (-(p + 1) * groupLen).toFixed(2)); },
       get groupLen() { return groupLen; }
     };
     build();
@@ -1162,10 +1239,11 @@
   var fine = window.matchMedia('(hover: hover) and (pointer: fine)');
   if (document.querySelector('[data-bgf-cursor]') && fine.matches && !reduce.matches) withGsap(function (gsap) {
     // [breedte, hoogte] van het liggende ovaal; het staande ovaal is gespiegeld, behalve bij slepen
-    var sizes = { base: [26, 14, 14, 26], hover: [40, 18, 18, 40], press: [20, 10, 10, 20], drag: [80, 24, 24, 40],
-      mute: [30, 7, 7, 30], sound: [9, 26, 9, 26] };
+    // slepen en geluid uit naar Figma "updated sound off and drag cursor" (646:182, BORING 2026-11-27)
+    var sizes = { base: [26, 14, 14, 26], hover: [40, 18, 18, 40], press: [20, 10, 10, 20], drag: [74, 18, 20, 40],
+      mute: [26, 8, 8, 26], sound: [9, 26, 9, 26] };
     // per stand: draaiing en zijwaartse verschuiving (px) van het liggende en het staande ovaal; overal elders 0
-    var poses = { mute: { rotation: 45, left: [0, 0] }, sound: { rotation: 0, left: [-6, 6] } };
+    var poses = { mute: { rotation: -45, left: [0, 0] }, sound: { rotation: 0, left: [-6, 6] } };
     var ovals = ['is-horizontal', 'is-vertical'].map(function (mod) {
       var o = document.createElement('span');
       o.className = 'bgf-cursor ' + mod;
@@ -1230,6 +1308,8 @@
       setState();
     });
     document.addEventListener('mouseup', function () { pressed = false; dragging = false; setState(); setTimeout(function () { setLabel(); setState(); }); });   // na de klik: nieuwe tekst en teken
+    // een module die tekst of teken wisselt (de video bij een klik) meldt dat meteen; mouseup komt vóór de click, dus daar is het te vroeg
+    document.addEventListener('bgf:cursor', function () { setLabel(); setState(); });
     document.documentElement.addEventListener('mouseleave', function () { gsap.to(ovals, { opacity: 0, duration: 0.2, overwrite: 'auto' }); });
   });
 
@@ -1283,12 +1363,30 @@
     // Over een donkere sectie (data-bgf-nav-dark: hero, footer) krijgt de nav data-bgf-nav-on-dark; site.css maakt de
     // Tickets-knop anders zwart, zodat hij ook op creme zichtbaar blijft
     // Gekeken wordt naar wat er echt onder de knop zichtbaar is (de hero kan vastgepind onder de galerij liggen)
-    var ticking = false;
+    /* Kleurwissel met de lijnen van de knop-hover (BORING 2026-11-27): de nieuwe kleur schuift in stroken over de oude, in de
+       richting van het scrollen (naar beneden = de stroken komen van onder, zoals de sectie zelf; omhoog = van boven).
+       Alleen met muis en zonder reduced motion; niet terwijl de muis op de knop staat (dan is de hover bezig). */
+    var ticking = false, lastY = window.scrollY, scrollDir = 1, swapTl = null;
+    var tickets = nav.querySelector('.nav_actions .button_wrapper');
+    var ticketBg = tickets && tickets.querySelector('.button_background');
+    var ticketLines = tickets ? [].slice.call(tickets.querySelectorAll('.button_background-line')) : [];
     function checkDark() {
       ticking = false;
+      var y0 = window.scrollY;
+      if (y0 !== lastY) { scrollDir = y0 > lastY ? 1 : -1; lastY = y0; }
       var x = window.innerWidth - 80, y = 38; // bij de Tickets-knop: midden van de knoppenbalk (1rem boven + 2.75rem hoog)
       var under = document.elementsFromPoint(x, y).filter(function (el) { return !el.closest('[data-bgf-nav], .transition'); })[0];
-      nav.toggleAttribute('data-bgf-nav-on-dark', !!(under && under.closest('[data-bgf-nav-dark]')));
+      var dark = !!(under && under.closest('[data-bgf-nav-dark]'));
+      if (dark === nav.hasAttribute('data-bgf-nav-on-dark')) return;
+      var g = window.gsap, strips = g && ticketBg && ticketLines.length && finePointer.matches && !reduce.matches && !tickets.matches(':hover');
+      if (strips) {
+        if (swapTl) swapTl.progress(1);
+        ticketBg.style.backgroundColor = getComputedStyle(ticketLines[0]).backgroundColor;   // oude kleur blijft eronder staan
+      }
+      nav.toggleAttribute('data-bgf-nav-on-dark', dark);
+      if (!strips) return;
+      swapTl = g.timeline({ onComplete: function () { ticketBg.style.backgroundColor = ''; swapTl = null; } })
+        .fromTo(ticketLines, { yPercent: scrollDir > 0 ? 101 : -101 }, { yPercent: 0, duration: 0.5, ease: 'expo.out', stagger: { amount: 0.15, from: 'random' }, overwrite: true });
     }
     function queueDark() { if (!ticking) { ticking = true; requestAnimationFrame(checkDark); } }
     window.addEventListener('scroll', queueDark, { passive: true });
@@ -1301,6 +1399,41 @@
       else if (navToggle && navToggle.getAttribute('aria-expanded') === 'true') { setMenu(false); navToggle.focus(); }
     });
     document.addEventListener('click', function (e) { if (!nav.contains(e.target)) { closeDrops(); setMenu(false); } });
+  });
+
+  /* TIJDELIJK (BORING 2026-11-27, weghalen of vastzetten na de keuze): link-hover om uit te kiezen op staging met ?links=1|2|3.
+     Elk teken (of woord) schuift binnen zijn masker naar rechts en zijn kopie (text-shadow, zelfde kleur, één tekenbreedte links)
+     schuift erin; bij verlaten schuiven ze terug naar links. 1 = tekens, kort na elkaar; 2 = tekens, langzamere golf; 3 = per woord.
+     Alleen met muis en zonder reduced motion. */
+  var linkMode = (window.location.search.match(/[?&]links=([123])/) || [])[1];
+  if (linkMode && finePointer.matches && !reduce.matches) withGsap(function (gsap) {
+    var cfg = { 1: { type: 'chars', duration: 0.45, stagger: 0.012, ease: 'power3.inOut' },
+      2: { type: 'chars', duration: 0.7, stagger: 0.03, ease: 'expo.out' },
+      3: { type: 'words', duration: 0.45, stagger: 0, ease: 'power3.inOut' } }[linkMode];
+    document.fonts.ready.then(function () {
+      each('.nav_link, .footer_detail, .footer_legal-link', function (link) {
+        var parts = window.SplitText.create(link, { type: cfg.type, mask: cfg.type })[cfg.type];
+        parts.forEach(function (p) { p.style.textShadow = (-p.offsetWidth) + 'px 0 0 currentColor'; });
+        link.addEventListener('mouseenter', function () { gsap.to(parts, { xPercent: 100, duration: cfg.duration, ease: cfg.ease, stagger: cfg.stagger, overwrite: true }); });
+        link.addEventListener('mouseleave', function () { gsap.to(parts, { xPercent: 0, duration: cfg.duration, ease: cfg.ease, stagger: cfg.stagger, overwrite: true }); });
+      });
+    });
+  }, ['SplitText']);
+
+  /* TIJDELIJK (BORING 2026-11-27): Section - About gecentreerd (Figma "section_about centered" 646:1933) als testversie op staging met
+     ?about=centered: tekst in het midden, de twee beelden scheef links en rechts, als video's van de huidige site (Vidzflow-mp4's van
+     /bontgenoten). Parallax blijft (data-bgf-speed op de beelden). De opmaak staat in site.css onder [data-bgf-about-test]. */
+  if (/[?&]about=centered/.test(window.location.search)) each('.about_section', function (section) {
+    section.setAttribute('data-bgf-about-test', '');
+    var SRC = ['https://r2.vidzflow.com/v/PYQTZswaTA_576p_1736264499.mp4', 'https://r2.vidzflow.com/v/2KfFM2nBiy_576p_1766503667.mp4'];
+    [].forEach.call(section.querySelectorAll('.about_photo-image'), function (img, i) {
+      var v = document.createElement('video');
+      v.className = 'about_photo-image';
+      v.src = SRC[i % 2]; v.poster = img.currentSrc || img.src;
+      v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = !reduce.matches;
+      v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
+      img.replaceWith(v);
+    });
   });
 
   /* data-bgf-hover: hover-animatie met GSAP, alleen op desktop met muis.
