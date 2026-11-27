@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.26.1: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.26.2: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1494,8 +1494,11 @@
       };
       wipe();   // meteen: de lijnen hebben de nieuwe kleur al
       swapTl = g.to(s, { e: 1, duration: 0.55, ease: 'power3.inOut', onUpdate: wipe, onComplete: function () {
-        ticketBg.style.backgroundColor = ticketText.style.color = ticketText.style.textShadow = ticketText.style.transition = '';
-        g.set(ticketLines, { yPercent: 0 }); g.set(chars, { clearProps: 'transform' }); swapTl = tickets.bgfSwap = null; } });
+        ticketBg.style.backgroundColor = ticketText.style.color = ticketText.style.textShadow = '';
+        g.set(ticketLines, { yPercent: 0 }); g.set(chars, { clearProps: 'transform' });
+        getComputedStyle(ticketText).color;   // eerst de nieuwe kleur vastzetten, dan pas de CSS-fade terug (anders faded hij van de oude kleur: zwart op zwart)
+        ticketText.style.transition = '';
+        swapTl = tickets.bgfSwap = null; } });
       tickets.bgfSwap = swapTl;
     }
     function queueDark() { if (!ticking) { ticking = true; requestAnimationFrame(checkDark); } }
