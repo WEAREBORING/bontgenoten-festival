@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.28.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.29.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -13,6 +13,21 @@
   var finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
   // plek op de pagina zonder transforms (offsetTop); de scheve kaarten (data-bgf-card) zouden getBoundingClientRect verschuiven
   function docTop(n) { var y = 0; for (; n; n = n.offsetParent) y += n.offsetTop; return y; }
+  // een vastgezette sectie (pin vanaf docTop) met ronde hoeken bovenaan (radius uit Webflow): het masker scrollt door terwijl de
+  // sectie stilstaat, tot de hoeken boven uit beeld zijn; onderaan knipt het niet (BORING 2026-11-27, video en quote). Met easePin
+  // pas vanaf het landen (el.bgfLanded), anders zou de rechte bovenrand nog in beeld komen.
+  // Aanroepen binnen gsap.matchMedia, dan gaat het bij een andere schermmaat terug.
+  function scrollCorners(gsap, el) {
+    var cs = getComputedStyle(el), r = parseFloat(cs.borderTopLeftRadius) || 0;
+    if (!r) return;
+    var corners = r + 'px ' + cs.borderTopRightRadius + ' ' + cs.borderBottomRightRadius + ' ' + cs.borderBottomLeftRadius;   // vóór de set hieronder lezen
+    var clip = function (c) { return 'inset(' + -c + 'px 0px 0px 0px round ' + corners + ')'; };
+    gsap.set(el, { borderTopLeftRadius: 0, borderTopRightRadius: 0, clipPath: clip(0) });
+    var tw = gsap.fromTo(el, { clipPath: clip(0) }, { clipPath: clip(r + 1), ease: 'none', immediateRender: false,
+      scrollTrigger: { trigger: el, start: function () { return el.bgfLanded || docTop(el); }, end: function () { return (el.bgfLanded || docTop(el)) + r + 1; },
+        scrub: true, refreshPriority: -1 } });   // na easePin meten, die zet bgfLanded
+    el.bgfCorners = tw.scrollTrigger;
+  }
   function ready(fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
   /* Zachte sticky (BORING 2026-11-27): sticky.js = @alpacka/sticky 0.2.1 uit de skill jesperlandberg/alpacka@sticky (.claude/skills/sticky),
      alleen de types eruit; staat naast site.js en wordt alleen geladen waar een sticky of pin is. Zonder muis of met reduced motion
@@ -35,11 +50,12 @@
       };
       window.ScrollTrigger.addEventListener('refreshInit', clear);
       var st = window.ScrollTrigger.create({ trigger: el,
-        start: function () { s0 = start(); c = m.curve({ travel: travel(), span: window.innerHeight * 0.4, ease: 'power2', lead: s0 }); return s0 + c.into[0]; },
+        start: function () { s0 = start(); c = m.curve({ travel: travel(), span: window.innerHeight * 0.4, ease: 'power2', lead: s0 }); el.bgfLanded = s0 + c.into[1]; return s0 + c.into[0]; },
         end: function () { return s0 + (landOnly ? c.into[1] : c.outof[1]); },
         onUpdate: write, onRefresh: write, onLeave: clear, onLeaveBack: clear });
+      if (el.bgfCorners) el.bgfCorners.refresh();   // scrollCorners mat zonder landing
       var kill = st.kill.bind(st);
-      st.kill = function () { window.ScrollTrigger.removeEventListener('refreshInit', clear); clear(); kill(); };
+      st.kill = function () { window.ScrollTrigger.removeEventListener('refreshInit', clear); clear(); el.bgfLanded = 0; kill(); };
       return st;
     });
   }
@@ -377,6 +393,19 @@
     });
   });
 
+  /* data-bgf-pop (Section - About, about_media): de kinderen (de video's) poppen één keer in beeld als de houder binnenkomt:
+     dekking 0 → 1, schaal 50% → 100% en 6° extra kanteling (om en om, zoals de kaarten) die terugdraait naar de eigen stand uit Webflow; expo.out zoals de rest van
+     de site, om de beurt (BORING 2026-11-27). Zonder reduced motion; de parallax (y) van data-bgf-speed loopt er los doorheen. */
+  if (document.querySelector('[data-bgf-pop]') && !reduce.matches) withGsap(function (gsap) {
+    each('[data-bgf-pop]', function (wrap) {
+      var kids = [].slice.call(wrap.children);
+      kids.forEach(function (el, i) {
+        gsap.from(el, { opacity: 0, scale: 0.5, rotate: gsap.getProperty(el, 'rotate') + (i % 2 ? 6 : -6), duration: 1.1, ease: 'expo.out', delay: i * 0.12,
+          scrollTrigger: { trigger: wrap, start: 'top 85%', once: true } });
+      });
+    });
+  }, ['ScrollTrigger']);
+
   /* data-bgf-parallax (Section - Gallery): kinderen met data-bgf-speed bewegen anders mee met scrollen.
      1 = gewoon mee, kleiner = trager (zakt, zoals de titel), groter = sneller (stijgt, zoals de foto's). De waarde van
      data-bgf-parallax is de afstand in px per 1 snelheidsverschil (standaard 250). Alleen vanaf 992px en zonder reduced motion. */
@@ -563,6 +592,21 @@
     }).observe(document.body);
   }, ['ScrollTrigger']);
 
+  /* data-bgf-lag="0.2" (Section Line-up): de sectie blijft iets achter (translateY omlaag) terwijl de volgende sectie (de galerijkaart)
+     eroverheen omhoog komt, zodat die sneller lijkt binnen te komen (BORING 2026-11-27). Waarde = deel van de schermhoogte (standaard
+     0.2), over dezelfde scroll als de kaart; sine.inOut zodat het zacht begint en eindigt. Vanaf 768px, zonder reduced motion. */
+  if (document.querySelector('[data-bgf-lag]') && !reduce.matches) withGsap(function (gsap) {
+    gsap.matchMedia().add('(min-width: 768px)', function () {
+      each('[data-bgf-lag]', function (el) {
+        var next = el.nextElementSibling, lag = num(el, 'data-bgf-lag', 0.2);
+        if (!next) return;
+        gsap.fromTo(el, { y: 0 }, { y: function () { return lag * window.innerHeight; }, ease: 'sine.inOut', immediateRender: false,
+          scrollTrigger: { trigger: next, start: function () { return docTop(next) - window.innerHeight; }, end: function () { return docTop(next); },
+            scrub: true, invalidateOnRefresh: true } });
+      });
+    });
+  }, ['ScrollTrigger']);
+
   /* data-bgf-lock (Section - Video): de sectie klikt zacht vast bovenaan het scherm en blijft staan terwijl de volgende sectie
      eroverheen schuift (zoals de "smooth sticky" van extrema.be). Zacht: de curve van de sticky-skill (easePin) laat de sectie over 40%
      schermhoogte afremmen tot stilstand bovenaan (losse translate, de kaart-transform blijft van data-bgf-card); daarna een pin tot de
@@ -576,6 +620,7 @@
         // afremmen naar de bovenkant met de curve van de sticky-skill (landing over 40% schermhoogte, begint op scrollsnelheid)
         eased.push(easePin(el, function () { return docTop(el); }, function () { return docTop(next) - docTop(el); }, true));
         window.ScrollTrigger.create({ trigger: el, start: function () { return docTop(el); }, end: function () { return docTop(next); }, pin: true, pinSpacing: false });
+        scrollCorners(gsap, el);
       });
       return function () { eased.forEach(function (p) { p.then(function (st) { st.kill(); }, function () {}); }); };
     });
@@ -623,6 +668,7 @@
           window.ScrollTrigger.create(st);
           // de pin landt en vertrekt zacht (sticky-skill), alleen met muis
           if (ctx.conditions.wide) {
+            scrollCorners(gsap, section);
             var eased = easePin(section, function () { return docTop(section); }, function () { return window.innerHeight; }, false);
             eased.catch(function () {});
             return function () { eased.then(function (t) { t.kill(); }, function () {}); };
@@ -1489,24 +1535,20 @@
       var dir = scrollDir, chars = tickets.bgfChars || [ticketText];
       ticketText.style.textShadow = '0 ' + dir + 'em 0 ' + getComputedStyle(ticketText).color;
       ticketText.style.color = oldInk;
-      // één veeg (BORING 2026-11-27; eerst stroken met willekeurige vertraging en tekens op een eigen klok: losse stukjes, tekst even zwart op zwart):
-      // alle stroken samen als één rand door de knop, en de tekst wisselt precies waar die rand langs de tekst gaat
-      var H = tickets.offsetHeight, tr = ticketText.parentNode.getBoundingClientRect(), br = tickets.getBoundingClientRect();
-      var t0 = tr.top - br.top, L = tr.height || 1, s = { e: 0 };
+      // zoals de hover (BORING 2026-11-27, "on brand"): de lijnen in de nieuwe kleur komen met dezelfde willekeurige stagger in
+      // (0.4 s expo.out) en tegelijk schuift elk teken naar zijn kopie (0.5 s expo.out, kleine stagger). Eén timeline in
+      // tickets.bgfSwap: een nieuwe wissel of een hover maakt hem eerst af, dus nooit losse stukjes of zwart op zwart.
       if (tickets.bgfLineTw) tickets.bgfLineTw.kill();
-      var wipe = function () {
-        var b = dir > 0 ? H * (1 - s.e) : H * s.e;
-        var p = Math.max(0, Math.min(1, dir > 0 ? (t0 + L - b) / L : (b - t0) / L));
-        g.set(ticketLines, { yPercent: (dir > 0 ? 101 : -101) * (1 - s.e) });
-        g.set(chars, { yPercent: -100 * dir * p });
-      };
-      wipe();   // meteen: de lijnen hebben de nieuwe kleur al
-      swapTl = g.to(s, { e: 1, duration: 0.55, ease: 'power3.inOut', onUpdate: wipe, onComplete: function () {
+      g.set(ticketLines, { yPercent: 101 * dir });
+      g.set(chars, { yPercent: 0 });
+      swapTl = g.timeline({ onComplete: function () {
         ticketBg.style.backgroundColor = ticketText.style.color = ticketText.style.textShadow = '';
         g.set(ticketLines, { yPercent: 0 }); g.set(chars, { clearProps: 'transform' });
         getComputedStyle(ticketText).color;   // eerst de nieuwe kleur vastzetten, dan pas de CSS-fade terug (anders faded hij van de oude kleur: zwart op zwart)
         ticketText.style.transition = '';
-        swapTl = tickets.bgfSwap = null; } });
+        swapTl = tickets.bgfSwap = null; } })
+        .to(ticketLines, { yPercent: 0, duration: 0.4, ease: 'expo.out', stagger: { amount: 0.15, from: 'random' } }, 0)
+        .to(chars, { yPercent: -100 * dir, duration: 0.5, ease: 'expo.out', stagger: Math.min(0.02, 0.2 / Math.max(1, chars.length - 1)) }, 0);
       tickets.bgfSwap = swapTl;
     }
     function queueDark() { if (!ticking) { ticking = true; requestAnimationFrame(checkDark); } }
