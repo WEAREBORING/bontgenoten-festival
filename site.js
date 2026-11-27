@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.17.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.18.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -580,11 +580,11 @@
     }, { threshold: 0.1 }).observe(player);
   });
 
-  /* data-bgf-lineup (Section Line-up, optie 2 "cilinder", Figma 642:1806 met meer lucht; gekozen door de klant 2026-11-26).
+  /* data-bgf-lineup (Section Line-up): coverflow (BORING 2026-11-27, uit de varianten op staging; was optie 2 "cilinder", Figma 642:1806).
      De kaarten zijn de items van de Collection List (CMS Line-up): [data-bgf-lineup-item] = Dag, met daarin [data-bgf-lineup-name],
      [data-bgf-lineup-tag] (Toevoeging) en [data-bgf-lineup-genre]. Zonder site.js blijft het de gewone scrollrij uit Webflow.
-     Met site.js: een vaste baan van 1440 x 680 die meeschaalt (--k), elke kaart op een plek van de cilinder; tussen de plekken
-     loopt alles vloeiend (Catmull-Rom). Slepen (met inertie), pijltjes, toetsen en klikken op een zijkaart draaien de cilinder;
+     Met site.js: een vaste baan van 1440 x 680 die meeschaalt (--k), elke kaart op zijn plek in de coverflow (vloeiend tussen de
+     plekken). Slepen (met inertie), pijltjes, toetsen en klikken op een zijkaart draaien de rij;
      hij loopt rond (korte lijsten worden herhaald tot er minstens 10 kaarten zijn). De naam van de artiest in het midden staat in
      [data-bgf-lineup-info] (creme blok met naam, toevoeging en genre). Dagknoppen [data-bgf-lineup-day] filteren.
      Reduced motion: geen inertie en geen animaties, wel alles bedienbaar. De maten staan in site.css ([data-bgf-lineup-ready]). */
@@ -617,84 +617,16 @@
       list.setAttribute('data-bgf-cursor-drag', '');
       section.setAttribute('data-bgf-lineup-ready', '');
 
-      // ---- cilinder: elke plek opgelost uit de Figma-trapezia (buiten- en binnenrand: x en hoogte; horizon op het kaartmidden) ----
+      // ---- coverflow (BORING koos hem 2026-11-27 uit de varianten): de middelste kaart recht, de buren gedraaid (62°) en naar achter,
+      // verdere kaarten dicht ertegenaan geschoven. d = gebroken plek (0 = midden, -1 links, 1 rechts), in baan-px van 1440 x 680 ----
       var P = 2400;   // CSS-perspectief (ook in site.css)
-      var GAP = 96;   // extra ruimte per plek (BORING/klant: "meer lucht"), in baan-px
-      var FIGMA = [
-        { xo: 1162, ho: 425, xi: 972, hi: 380, opacity: 1, dim: 0.15 },
-        { xo: 1314, ho: 490, xi: 1174, hi: 435, opacity: 1, dim: 0.3 },
-        { xo: 1426, ho: 570, xi: 1326, hi: 500, opacity: 1, dim: 0.45 }
-      ];
-      var right = [{ tx: 0, tz: 0, ry: 0, w: 480, opacity: 1, dim: 0 }];
-      FIGMA.forEach(function (f) {
-        var ko = f.ho / 600, ki = f.hi / 600, zo = P * (1 - 1 / ko), zi = P * (1 - 1 / ki), xo = (f.xo - 720) / ko, xi = (f.xi - 720) / ki;
-        right.push({ tx: (xo + xi) / 2, tz: (zo + zi) / 2, ry: Math.atan2(-(zo - zi), xo - xi) * 180 / Math.PI, w: Math.hypot(xo - xi, zo - zi), opacity: f.opacity, dim: f.dim });
-      });
-      right.push(Object.assign({}, right[3], { tx: right[3].tx + 90, opacity: 0, dim: 0.6 }));   // plek 4: schuift van de rand en verdwijnt
-      right.forEach(function (slot, i) { slot.tx += i * GAP; });
-      var CYL = {};
-      Object.keys(right[0]).forEach(function (key) {
-        var odd = key === 'tx' || key === 'ry';
-        CYL[key] = [4, 3, 2, 1].map(function (i) { return odd ? -right[i][key] : right[i][key]; }).concat(right.map(function (r) { return r[key]; }));
-      });
-      // Catmull-Rom door de plekwaarden op een gebroken plek d (-4..4); daarbuiten de rand
-      function cr(v, d) {
-        var x = Math.max(0, Math.min(8, d + 4)), i = Math.min(7, Math.floor(x)), u = x - i;
-        var p0 = v[Math.max(0, i - 1)], p1 = v[i], p2 = v[i + 1], p3 = v[Math.min(8, i + 2)];
-        return 0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u + (3 * p1 - p0 - 3 * p2 + p3) * u * u * u);
+      var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+      function at(d) {
+        var a = Math.abs(d), s = d < 0 ? -1 : 1, near = clamp(a, 0, 1), far = Math.max(0, a - 1);
+        return { tx: s * (near * 430 + far * 150), tz: -near * 260 - far * 40, ry: -s * near * 62,
+          opacity: clamp(4.3 - a, 0, 1), dim: clamp(near * 0.25 + far * 0.12, 0, 0.7) };
       }
-      // ---- TIJDELIJK (BORING kiest een slider, 2026-11-26): ?lineup=<variant> op staging toont een andere beweging met een keuzebalk
-      // rechtsonder (toetsen 1-7). Zonder ?lineup= blijft het de cilinder. Haal dit weg zodra er gekozen is. ----
-      var clampV = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
-      var cyl = function (d) { return { tx: cr(CYL.tx, d), ty: 0, tz: cr(CYL.tz, d), ry: cr(CYL.ry, d), rz: 0, w: cr(CYL.w, d), opacity: cr(CYL.opacity, d), dim: cr(CYL.dim, d) }; };
-      var VARIANTS = {
-        cilinder: { name: 'Cilinder (nu live)', at: cyl },
-        binnenkant: { name: 'Cilinder binnenkant (hol, andersom gedraaid)', at: function (d) {
-          var c = cyl(d), a = Math.min(Math.abs(d), 3.2);
-          return Object.assign(c, { tz: 140 * Math.pow(a, 1.1), tx: c.tx * 0.95, ry: -c.ry * 0.85, dim: c.dim * 0.8 }); } },
-        coverflow: { name: 'Coverflow', at: function (d) {
-          var a = Math.abs(d), s = d < 0 ? -1 : 1, near = clampV(a, 0, 1);
-          return { tx: s * (near * 430 + Math.max(0, a - 1) * 150), ty: 0, tz: -near * 260 - Math.max(0, a - 1) * 40, ry: -s * near * 62, rz: 0, w: 480,
-            opacity: clampV(4.3 - a, 0, 1), dim: clampV(near * 0.25 + Math.max(0, a - 1) * 0.12, 0, 0.7) }; } },
-        vlak: { name: 'Vlakke rij (kleiner naar de zijkant)', at: function (d) {
-          var a = Math.abs(d), s = d < 0 ? -1 : 1;
-          return { tx: s * (a * 470 - Math.max(0, a - 1) * 80), ty: 0, tz: -Math.min(a, 1) * 520 - Math.max(0, a - 1) * 200, ry: 0, rz: 0, w: 480,
-            opacity: clampV(4 - a, 0, 1), dim: clampV(a * 0.25, 0, 0.7) }; } },
-        golf: { name: 'Golf', at: function (d) {
-          var a = Math.abs(d), s = d < 0 ? -1 : 1;
-          return { tx: d * 400, ty: Math.sin(d * 1.1) * 70 + a * 30, tz: -a * 330, ry: 0, rz: d * 4, w: 480,
-            opacity: clampV(4.2 - a, 0, 1), dim: clampV(a * 0.2, 0, 0.6) }; } },
-        stapel: { name: 'Stapel (kaarten op elkaar)', at: function (d) {
-          if (d < 0) { var o = clampV(-d, 0, 1); return { tx: -o * 900, ty: o * 40, tz: 0, ry: 0, rz: -o * 14, w: 480, opacity: 1 - clampV(-d * 1.2, 0, 1), dim: 0 }; }
-          return { tx: d * 70, ty: -d * 18, tz: -d * 160, ry: 0, rz: d * 3, w: 480, opacity: clampV(4.5 - d, 0, 1), dim: clampV(d * 0.18, 0, 0.7) }; } },
-        spiraal: { name: 'Draaiende schijf (zijkanten zakken weg)', at: function (d) {
-          var ang = clampV(d, -3.5, 3.5) * 24 * Math.PI / 180, R = 1500;
-          return { tx: Math.sin(ang) * R * 0.75, ty: (1 - Math.cos(ang)) * R * 0.55, tz: -(1 - Math.cos(ang)) * 300, ry: 0, rz: ang * 180 / Math.PI * 0.9, w: 480,
-            opacity: clampV(4 - Math.abs(d), 0, 1), dim: clampV(Math.abs(d) * 0.15, 0, 0.6) }; } }
-      };
-      var variantKey = new URLSearchParams(location.search).get('lineup') || 'cilinder', showBar = new URLSearchParams(location.search).has('lineup');
-      if (!VARIANTS[variantKey]) variantKey = 'cilinder';
-      var VAR = VARIANTS[variantKey];
-      if (showBar) (function () {   // keuzebalk rechtsonder
-        var bar = document.createElement('div');
-        bar.setAttribute('style', 'position:fixed;z-index:99999;right:16px;bottom:16px;display:flex;flex-wrap:wrap;gap:6px;max-width:560px;justify-content:flex-end;font:600 12px/1 system-ui,sans-serif');
-        Object.keys(VARIANTS).forEach(function (key, i) {
-          var b = document.createElement('a');
-          b.textContent = (i + 1) + ' ' + VARIANTS[key].name;
-          var u = new URL(location.href); u.searchParams.set('lineup', key); u.hash = 'lineup';
-          b.href = u.toString();
-          b.setAttribute('style', 'padding:8px 10px;border-radius:99px;text-decoration:none;' + (key === variantKey ? 'background:#f4eae1;color:#0c0c0c' : 'background:rgba(12,12,12,.75);color:#f4eae1'));
-          bar.appendChild(b);
-        });
-        document.body.appendChild(bar);
-        document.addEventListener('keydown', function (e) {
-          var n = parseInt(e.key, 10), keys = Object.keys(VARIANTS);
-          if (n >= 1 && n <= keys.length && !e.metaKey && !e.ctrlKey && !(e.target.closest && e.target.closest('input,textarea'))) location.href = bar.children[n - 1].href;
-        });
-      })();
-      var s1 = VAR.at(1);
-      var s1 = VAR.at(1);
-      var stepTrack = Math.max(260, Math.abs(s1.tx) * P / (P - s1.tz));   // baan-px van het midden tot plek 1 (minimaal 260, anders slepen te gevoelig)
+      var s1 = at(1), stepTrack = s1.tx * P / (P - s1.tz);   // baan-px van het midden tot plek 1 (sleepafstand per kaart)
 
       // ---- ring: de kaarten van de gekozen dag, herhaald tot minstens 10 (kopieën zijn verborgen voor schermlezers) ----
       var ring = [], cards = [], pos = 0, lastPos = NaN, active = -1, tween = null, target = 0, settled = true, k = 1;
@@ -728,14 +660,13 @@
         lastPos = pos;
         var n = cards.length;
         cards.forEach(function (c, i) {
-          var d = wrap(i - pos, n), a = Math.abs(d), S = VAR.at(d), op = Math.max(0, Math.min(1, S.opacity)), st = c.style;
+          var d = wrap(i - pos, n), a = Math.abs(d), S = at(d), op = S.opacity, st = c.style;
           st.visibility = op <= 0 ? 'hidden' : '';
           if (op <= 0) return;
-          st.transform = 'translate3d(' + S.tx + 'px, ' + S.ty + 'px, ' + S.tz + 'px) rotateY(' + S.ry + 'deg)' + (S.rz ? ' rotateZ(' + S.rz + 'deg)' : '');
+          st.transform = 'translate3d(' + S.tx + 'px, 0, ' + S.tz + 'px) rotateY(' + S.ry + 'deg)';
           st.opacity = op;
-          st.clipPath = 'inset(0 ' + Math.max(0, 480 - S.w) / 2 + 'px round 16px)';
           st.zIndex = 100 - Math.round(a * 10);
-          st.setProperty('--bgf-dim', Math.max(0, Math.min(1, S.dim)).toFixed(3));
+          st.setProperty('--bgf-dim', S.dim.toFixed(3));
           // de foto schuift binnen de kaart iets tegen de draairichting in (individuele translate: de hover-schaal blijft transform)
           if (!reduce.matches) st.setProperty('--bgf-shift', (Math.max(-3, Math.min(3, d)) * -2).toFixed(2) + '%');
         });
