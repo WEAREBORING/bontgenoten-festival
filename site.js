@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.20.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.21.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -262,14 +262,17 @@
     function layout() {
       // het slot van Webflow zet de foto's in een kale <div> (site.css: display contents)
       var root = list.children.length === 1 && !list.children[0].className ? list.children[0] : list;
-      var items = [].slice.call(root.children), k = list.clientWidth / 1440, bottom = 0, spread = 0;
-      var host = list.closest('[data-bgf-parallax]'), distance = host ? num(host, 'data-bgf-parallax', 250) : 0;
+      var items = [].slice.call(root.children), k = list.clientWidth / 1440, bottom = 0, spread = 0, lift = 0;
+      var host = list.closest('[data-bgf-parallax]'), distance = host && !reduce.matches ? num(host, 'data-bgf-parallax', 250) : 0;
+      // ruimte boven: een trage foto begint (1 - s) × distance boven zijn plek; staat hij hoog in het eerste blok, dan zakt alles zoveel
+      // dat de bovenkant van de kaart hem niet afknipt (BORING 2026-11-27, sterkere parallax)
+      items.forEach(function (el, i) { var p = COLLAGE[i % 7]; if (i < 7) lift = Math.max(lift, (1 - p.s) * distance - p.y * k); });
       items.forEach(function (el, i) {
         if (!wide.matches) { el.style.left = el.style.top = el.style.width = el.style.aspectRatio = ''; el.removeAttribute('data-bgf-speed'); return; }
         var p = COLLAGE[i % 7], block = Math.floor(i / 7), portrait = p.w < 300, h = portrait ? p.w * 4 / 3 : p.w * 2 / 3;
         var x = block % 2 ? 1440 - p.x - p.w : p.x, y = block * 1104 + p.y;   // elk tweede blok gespiegeld
         el.style.left = (x / 14.4) + '%';
-        el.style.top = (y * k) + 'px';
+        el.style.top = (y * k + lift) + 'px';
         el.style.width = (p.w / 14.4) + '%';
         el.style.aspectRatio = portrait ? '3 / 4' : '3 / 2';
         el.setAttribute('data-bgf-speed', p.s);
@@ -277,7 +280,7 @@
         spread = Math.max(spread, Math.abs(p.s - 1) * distance);
       });
       // ruimte voor de parallax: een trage foto zakt tot `spread` px onder zijn plek (data-bgf-parallax), anders knipt de sectie hem af
-      list.style.height = wide.matches && items.length ? ((bottom + 80) * k + (reduce.matches ? 0 : spread)) + 'px' : '';
+      list.style.height = wide.matches && items.length ? ((bottom + 80) * k + lift + spread) + 'px' : '';
     }
     layout();
     window.addEventListener('resize', layout);
@@ -372,9 +375,11 @@
       el.appendChild(canvas);
       var g = startGradient(el, canvas, el.getAttribute('data-bgf-gradient-text') || 'bgf-glass', function () { el.setAttribute('data-bgf-live', ''); }, { pointer: false, maxDpr: 1 });   // letterranden komen uit de SVG-clip, 1x is scherp genoeg
       var fit = function () {
-        var cs = getComputedStyle(el), c = canvas.getBoundingClientRect(), m = marker.getBoundingClientRect();
-        t.setAttribute('x', m.left - c.left);
-        t.setAttribute('y', m.top - c.top);
+        // offsets, niet getBoundingClientRect: die rekent de scheve kaart (scale 0.8, rotate) en de sticky-translate mee en dan
+        // staat de clip verschoven als er tijdens de overgang gemeten wordt (BORING 2026-11-27: "jaar" weg, titel niet in het midden)
+        var cs = getComputedStyle(el), c = { width: canvas.offsetWidth };
+        t.setAttribute('x', marker.offsetLeft - canvas.offsetLeft);
+        t.setAttribute('y', marker.offsetTop - canvas.offsetTop);
         t.setAttribute('font-family', cs.fontFamily);
         t.setAttribute('font-size', cs.fontSize);
         t.setAttribute('font-weight', cs.fontWeight);
@@ -383,6 +388,7 @@
         g.setState({ stripsMin: strips, stripsMax: strips + 1 });
       };
       document.fonts.ready.then(fit);
+      document.fonts.addEventListener('loadingdone', fit);   // een lettertype dat later binnenkomt verschuift de basislijn
       new ResizeObserver(fit).observe(el);
     });
   }).catch(function (e) { console.error('site.js:', e); });
@@ -463,6 +469,14 @@
       });
       return function () { window.ScrollTrigger.removeEventListener('refreshInit', clear); if (dim) dim.remove(); };
     });
+    // de pagina wordt later korter of langer (FAQ-tab met minder vragen, accordeon, afbeeldingen): dan alles opnieuw meten, anders
+    // eindigt de footerkaart op de oude hoogte en staat hij onderaan nog scheef (BORING 2026-11-27)
+    var height = 0, wait = 0;
+    window.ScrollTrigger.addEventListener('refresh', function () { height = document.documentElement.scrollHeight; });
+    new ResizeObserver(function () {
+      clearTimeout(wait);
+      wait = setTimeout(function () { if (Math.abs(document.documentElement.scrollHeight - height) > 1) window.ScrollTrigger.refresh(); }, 200);
+    }).observe(document.body);
   }, ['ScrollTrigger']);
 
   /* data-bgf-lock (Section - Video): de sectie klikt zacht vast bovenaan het scherm en blijft staan terwijl de volgende sectie

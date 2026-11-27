@@ -533,6 +533,11 @@ const PRESETS = [
   { id:'bgf-glass', name:'BGF glas', desc:'Verloop en glasstroken zonder 10', patch:{
     loopSec:20, hold:.55, animDisp:false, animGrad:false, animZoom:false, animBlur:false, dispMin:.034, dispMax:.525, zoomMax:1.6, blurMax:.075, gMomentAmt:.32, gTurns:1, ripAmt:.06, maskInfl:-.21,
     showShape:false, pointerStrips:true, pointerShift:.6, lens:false, pointerSmooth:.98 } },
+  // BORING 2026-11-27: the marquee band as bgf-glass without pine, and lagoon after flamingo: pine and the red-to-blue blend read as dark/not dark in the narrow band
+  { id:'bgf-band', name:'BGF band', desc:'BGF glas zonder pine (lagoon na flamingo), voor de marqueeband', patch:{
+    loopSec:20, hold:.55, animDisp:false, animGrad:false, animZoom:false, animBlur:false, dispMin:.034, dispMax:.525, zoomMax:1.6, blurMax:.075, gMomentAmt:.32, gTurns:1, ripAmt:.06, maskInfl:-.21,
+    showShape:false, pointerStrips:true, pointerShift:.6, lens:false, pointerSmooth:.98,
+    stops:[{c:'#FDAE04',p:0},{c:'#F57513',p:.25},{c:'#FF2A00',p:.5},{c:'#EC7CEE',p:.75},{c:'#0580CD',p:1}] } },
 ];
 Object.assign(DEFAULTS, deep(PRESET7));
 // ---------- bron: "10" in Suisse BP Int'l ----------
