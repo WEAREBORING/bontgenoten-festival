@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.23.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.24.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -180,11 +180,14 @@
         onComplete: function () { gsap.set(lines, { yPercent: 101 }); } });
     }
     // tekens naar y (-100 = de kopie in beeld, 0 = rust); de hele golf hoogstens 0.7 s
+    // FAQ-tabs zijwaarts zoals de link-hover (BORING 2026-11-27): -100 wordt xPercent 100, met de timing van de links
     function textTo(button, y, from) {
       var chars = button.bgfChars;
       if (!chars) return;
-      var vars = { yPercent: y, duration: 0.5, ease: 'expo.out', stagger: Math.min(0.02, 0.2 / Math.max(1, chars.length - 1)), overwrite: true };
-      if (from == null) gsap.to(chars, vars); else gsap.fromTo(chars, { yPercent: from }, vars);
+      var side = button.bgfSide, prop = side ? 'xPercent' : 'yPercent', vars = { duration: side ? 0.7 : 0.5, ease: 'expo.out', overwrite: true,
+        stagger: side ? Math.min(0.03, 0.3 / Math.max(1, chars.length - 1)) : Math.min(0.02, 0.2 / Math.max(1, chars.length - 1)) };
+      vars[prop] = side ? -y : y;
+      if (from == null) gsap.to(chars, vars); else { var f = {}; f[prop] = side ? -from : from; gsap.fromTo(chars, f, vars); }
     }
     hosts.forEach(function (button) {
       var lines = button.querySelectorAll('.button_background-line, [data-bgf-fill-line]');
@@ -193,7 +196,11 @@
       gsap.set(lines, { height: '101%', yPercent: full ? 0 : 101 });
       var text = button.querySelector('.button_text, .faq_tab-text');
       if (text && finePointer.matches && !reduce.matches) document.fonts.ready.then(function () {
-        button.bgfChars = window.SplitText.create(text, { type: 'chars' }).chars;   // SplitText zet aria-label op de tekst, de tekens aria-hidden
+        button.bgfSide = text.classList.contains('faq_tab-text');
+        // de kopie: bij knoppen de text-shadow 1em lager (erft per teken); bij de FAQ-tabs één tekenbreedte links, in dezelfde kleur, met masker per teken
+        var copy = button.bgfSide && (getComputedStyle(text).textShadow.match(/^(rgba?\([^)]*\)|#\w+)/) || [])[1];
+        button.bgfChars = window.SplitText.create(text, button.bgfSide ? { type: 'chars', mask: 'chars' } : { type: 'chars' }).chars;   // SplitText zet aria-label op de tekst, de tekens aria-hidden
+        if (copy) button.bgfChars.forEach(function (c) { c.style.textShadow = (-c.offsetWidth) + 'px 0 0 ' + copy; });
         text.setAttribute('data-bgf-chars', '');
       });
       var on = false;
@@ -300,7 +307,9 @@
         spread = Math.max(spread, Math.abs(p.s - 1) * distance);
       });
       // ruimte voor de parallax: een trage foto zakt tot `spread` px onder zijn plek (data-bgf-parallax), anders knipt de sectie hem af
-      list.style.height = wide.matches && items.length ? ((bottom + 80) * k + lift + spread) + 'px' : '';
+      // + 1.25 titelhoogte (BORING 2026-11-27): de foto's zijn uit beeld voordat de titel (sticky, schermhoog) vertrekt, ook zijn zachte vertrek
+      var title = list.parentNode.querySelector('.gallery_title');
+      list.style.height = wide.matches && items.length ? ((bottom + 80) * k + lift + spread + (title ? title.offsetHeight * 1.25 : 0)) + 'px' : '';
     }
     layout();
     window.addEventListener('resize', layout);
