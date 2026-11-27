@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.21.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.22.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -157,7 +157,11 @@
      erin = van onder naar het midden, eruit = van het midden naar boven; daarna staat hij weer onder klaar.
      Button "Creme hover-rand" andersom: daar zijn de lijnen in rust vol (ze vormen de achtergrond), bij hover gaan ze eruit
      (omhoog weg, de knop wordt doorzichtig met alleen de rand) en bij verlaten komen ze er van onder weer in.
-     Snel in en uit of halverwege terug: een lijn die nog boven weg aan het gaan is, keert om; nooit een sprong. */
+     Snel in en uit of halverwege terug: een lijn die nog boven weg aan het gaan is, keert om; nooit een sprong.
+     Tekst per teken (BORING 2026-11-27, zoals de link-hover): de tekst (.button_text, .faq_tab-text) wordt in tekens gesplitst en elk teken
+     schuift naar zijn kopie (de text-shadow 1em lager, die erft per teken), met een kleine stagger; het masker is de text-wrapper.
+     Alleen met muis en zonder reduced motion; anders (en zonder JS) blijft de CSS-slide van de hele tekst. [data-bgf-chars] zet die
+     CSS-transform uit (site.css). button.bgfChars = de tekens, ook voor de kleurwissel van Tickets in de nav. */
   if (document.querySelector('.button_background-line, [data-bgf-fill-line]')) withGsap(function (gsap) {
     var desktop = window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 992px)');
     var hosts = [].slice.call(document.querySelectorAll('.button_wrapper'));
@@ -175,21 +179,36 @@
       gsap.to(lines, { yPercent: -101, duration: 0.4, ease: 'expo.out', stagger: stagger, overwrite: true,
         onComplete: function () { gsap.set(lines, { yPercent: 101 }); } });
     }
+    // tekens naar y (-100 = de kopie in beeld, 0 = rust); de hele golf hoogstens 0.7 s
+    function textTo(button, y, from) {
+      var chars = button.bgfChars;
+      if (!chars) return;
+      var vars = { yPercent: y, duration: 0.5, ease: 'expo.out', stagger: Math.min(0.02, 0.2 / Math.max(1, chars.length - 1)), overwrite: true };
+      if (from == null) gsap.to(chars, vars); else gsap.fromTo(chars, { yPercent: from }, vars);
+    }
     hosts.forEach(function (button) {
       var lines = button.querySelectorAll('.button_background-line, [data-bgf-fill-line]');
       if (!lines.length) return;
       var full = parseFloat(window.getComputedStyle(lines[0]).height) > 0;   // lijnen in rust vol = omgekeerde hover
       gsap.set(lines, { height: '101%', yPercent: full ? 0 : 101 });
+      var text = button.querySelector('.button_text, .faq_tab-text');
+      if (text && finePointer.matches && !reduce.matches) document.fonts.ready.then(function () {
+        button.bgfChars = window.SplitText.create(text, { type: 'chars' }).chars;   // SplitText zet aria-label op de tekst, de tekens aria-hidden
+        text.setAttribute('data-bgf-chars', '');
+      });
       var on = false;
       function enter() {
         if (on || !desktop.matches || reduce.matches || button.getAttribute('aria-selected') === 'true') return;
         on = true;
+        if (button.bgfSwap) button.bgfSwap.progress(1);   // kleurwissel van de nav-knop eerst af
         if (full) fillOut(lines); else fillIn(lines);
+        textTo(button, -100);
       }
       function leave() {
         if (!on) return;
         on = false;
         if (full) fillIn(lines); else fillOut(lines);
+        textTo(button, 0);
       }
       button.addEventListener('mouseenter', enter);
       button.addEventListener('mouseleave', leave);
@@ -197,11 +216,12 @@
       button.addEventListener('bgf:deselect', function () {
         if (!desktop.matches || reduce.matches || full) return;
         on = false; gsap.set(lines, { yPercent: 0 }); fillOut(lines);
+        textTo(button, 0, -100);   // tekens van hun creme kopie terug (zonder tekens doet de tabs-module de hele tekst)
       });
       // naar tablet of touch terwijl de muis erop staat: terug naar rust
       desktop.addEventListener('change', leave);
     });
-  });
+  }, ['SplitText']);
 
   /* [words-slide-up]: woorden schuiven per stuk omhoog in beeld (masker .mask om elk .word, css in site.css) */
   if (document.querySelector('[words-slide-up]') && !reduce.matches) withGsap(function (gsap) {
@@ -1152,7 +1172,7 @@
       // de vorige tab springt niet terug maar gaat eruit als een hover-uit (lijnen: button-module; tekst: hier, van zijn creme kopie terug)
       if (was && was !== tab) {
         var text = was.querySelector('.faq_tab-text');
-        if (text && window.gsap && !reduce.matches && window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 992px)').matches) {
+        if (text && !text.hasAttribute('data-bgf-chars') && window.gsap && !reduce.matches && window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 992px)').matches) {
           text.style.transition = 'none';
           window.gsap.fromTo(text, { yPercent: -100 }, { yPercent: 0, duration: 0.3, ease: 'power3.inOut',
             onComplete: function () { window.gsap.set(text, { clearProps: 'transform' }); text.style.transition = ''; } });
@@ -1387,6 +1407,7 @@
     var tickets = nav.querySelector('.nav_actions .button_wrapper');
     var ticketBg = tickets && tickets.querySelector('.button_background');
     var ticketLines = tickets ? [].slice.call(tickets.querySelectorAll('.button_background-line')) : [];
+    var ticketText = tickets && tickets.querySelector('.button_text');
     function checkDark() {
       ticking = false;
       var y0 = window.scrollY;
@@ -1395,15 +1416,27 @@
       var under = document.elementsFromPoint(x, y).filter(function (el) { return !el.closest('[data-bgf-nav], .transition'); })[0];
       var dark = !!(under && under.closest('[data-bgf-nav-dark]'));
       if (dark === nav.hasAttribute('data-bgf-nav-on-dark')) return;
-      var g = window.gsap, strips = g && ticketBg && ticketLines.length && finePointer.matches && !reduce.matches && !tickets.matches(':hover');
+      var g = window.gsap, strips = g && ticketBg && ticketText && ticketLines.length && finePointer.matches && !reduce.matches && !tickets.matches(':hover');
+      var oldInk = null;
       if (strips) {
         if (swapTl) swapTl.progress(1);
         ticketBg.style.backgroundColor = getComputedStyle(ticketLines[0]).backgroundColor;   // oude kleur blijft eronder staan
+        ticketText.style.transition = 'none';   // de kleur niet laten faden: de tekst schuift (hieronder)
+        oldInk = getComputedStyle(ticketText).color;
       }
       nav.toggleAttribute('data-bgf-nav-on-dark', dark);
       if (!strips) return;
-      swapTl = g.timeline({ onComplete: function () { ticketBg.style.backgroundColor = ''; swapTl = null; } })
-        .fromTo(ticketLines, { yPercent: scrollDir > 0 ? 101 : -101 }, { yPercent: 0, duration: 0.5, ease: 'expo.out', stagger: { amount: 0.15, from: 'random' }, overwrite: true });
+      // tekst zoals de hover (BORING 2026-11-27): de tekens schuiven naar een kopie in de nieuwe kleur, in de scrollrichting
+      // (naar beneden = kopie van onder, omhoog = kopie van boven); daarna de rust van de nieuwe kleur (CSS), zonder sprong
+      var dir = scrollDir, chars = tickets.bgfChars || [ticketText];
+      ticketText.style.textShadow = '0 ' + dir + 'em 0 ' + getComputedStyle(ticketText).color;
+      ticketText.style.color = oldInk;
+      swapTl = g.timeline({ onComplete: function () {
+        ticketBg.style.backgroundColor = ticketText.style.color = ticketText.style.textShadow = ticketText.style.transition = '';
+        g.set(chars, { clearProps: 'transform' }); swapTl = tickets.bgfSwap = null; } })
+        .fromTo(ticketLines, { yPercent: dir > 0 ? 101 : -101 }, { yPercent: 0, duration: 0.5, ease: 'expo.out', stagger: { amount: 0.15, from: 'random' }, overwrite: true })
+        .fromTo(chars, { yPercent: 0 }, { yPercent: -100 * dir, duration: 0.5, ease: 'expo.out', stagger: Math.min(0.02, 0.15 / Math.max(1, chars.length - 1)), overwrite: true }, 0);
+      tickets.bgfSwap = swapTl;
     }
     function queueDark() { if (!ticking) { ticking = true; requestAnimationFrame(checkDark); } }
     window.addEventListener('scroll', queueDark, { passive: true });

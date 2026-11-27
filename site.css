@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.css v1.21.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
+/* Bontgenoten Festival site.css v1.22.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
 
 /* Vloeiende root-fontgrootte: 1rem = 16px op het ontwerpformaat (1440 x 900) en daaronder. Groter alleen als het scherm
    zowel breder als hoger is, tot 18px; zo past een sectie ook op een breed maar laag scherm.
@@ -54,6 +54,8 @@ html.bgf-nav-open { overflow: hidden; }
 .nav_actions .button_wrapper { transition: border-color 0.35s ease; }
 /* de hover-slide (transform, Global - Styles) moet in dezelfde transition blijven, anders springt de tekst */
 .nav_actions .button_text { transition: transform 0.3s cubic-bezier(0.77, 0, 0.175, 1), color 0.35s ease 0.05s, text-shadow 0.35s ease 0.05s; }
+/* tekst per teken (site.js, alleen muis zonder reduced motion): de tekens bewegen zelf, de CSS-slide van de hele tekst (Global - Styles, hierboven) staat dan uit */
+[data-bgf-chars] { transform: none !important; }
 
 /* data-bgf-tabs (Section - FAQ): de actieve tab is gevuld (zwart met creme tekst). Hover = de knop-hover: lijnen vullen (site.js)
    en de tekst schuift naar zijn creme kopie (text-shadow), alleen desktop met muis en niet op de actieve tab */
