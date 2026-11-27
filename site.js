@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.29.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.30.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -105,12 +105,13 @@
   }
 
   /* Tekst wisselen zoals de link-hover (BORING 2026-11-27: teller en genre van de line-up): de oude tekens schuiven in hun masker opzij weg, de
-     nieuwe schuiven erin (dir 1 = naar links, nieuw komt van rechts). Zonder muis, met reduced motion of de eerste keer: direct. */
-  function swapText(el, html, dir) {
+     nieuwe schuiven erin (dir 1 = naar links, nieuw komt van rechts). Zonder muis, met reduced motion of de eerste keer: direct.
+     edges: ook van of naar leeg animeren (alleen erin of alleen eruit), zoals de cursortekst bij binnenkomen en weggaan. */
+  function swapText(el, html, dir, edges) {
     if (!el) return;
     var gsap = window.gsap;
     if (el.bgfSwap) el.bgfSwap.progress(1);
-    if (!gsap || !window.SplitText || !finePointer.matches || reduce.matches || !el.textContent.trim() || !html) { el.innerHTML = html; return; }
+    if (!gsap || !window.SplitText || !finePointer.matches || reduce.matches || (!edges && (!el.textContent.trim() || !html)) || (!el.textContent.trim() && !html)) { el.innerHTML = html; return; }
     var out = document.createElement('div'), inn = document.createElement('div'), cs = getComputedStyle(el);
     while (el.firstChild) out.appendChild(el.firstChild);
     inn.innerHTML = html;
@@ -121,9 +122,9 @@
     el.appendChild(inn);
     var a = window.SplitText.create(out, { type: 'chars', mask: 'chars' }).chars, b = window.SplitText.create(inn, { type: 'chars', mask: 'chars' }).chars;
     var st = function (n) { return { each: Math.min(0.03, 0.3 / Math.max(1, n - 1)), from: dir > 0 ? 'start' : 'end' }; };
-    el.bgfSwap = gsap.timeline({ onComplete: function () { el.bgfSwap = null; el.innerHTML = html; } })
-      .to(a, { xPercent: -100 * dir, duration: 0.5, ease: 'expo.out', stagger: st(a.length) }, 0)
-      .fromTo(b, { xPercent: 100 * dir }, { xPercent: 0, duration: 0.7, ease: 'expo.out', stagger: st(b.length) }, 0);
+    var tl = el.bgfSwap = gsap.timeline({ onComplete: function () { el.bgfSwap = null; el.innerHTML = html; } });
+    if (a.length) tl.to(a, { xPercent: -100 * dir, duration: 0.5, ease: 'expo.out', stagger: st(a.length) }, 0);
+    if (b.length) tl.fromTo(b, { xPercent: 100 * dir }, { xPercent: 0, duration: 0.7, ease: 'expo.out', stagger: st(b.length) }, 0);
   }
 
   /* data-bgf-year: zet het huidige jaar (bijvoorbeeld het copyright in de footer) */
@@ -1403,8 +1404,8 @@
       // tijdens het slepen niet: de instructie is dan klaar en het brede sleep-ovaal zou eroverheen vallen
       var text = labelled && !dragging ? labelled.getAttribute('data-bgf-cursor-label') : '';
       icon = labelled && labelled.getAttribute('data-bgf-cursor-icon') || '';
-      if (label.textContent !== text) label.textContent = text;
-      label.style.visibility = text ? '' : 'hidden';
+      // wisselen, binnenkomen en weggaan zoals de link-hover (BORING 2026-11-27): erin en wisselen van rechts, weg naar rechts
+      if (label.bgfText !== text) { swapText(label, text.replace(/&/g, '&amp;').replace(/</g, '&lt;'), text ? 1 : -1, true); label.bgfText = text; }
     }
     var moveX = ovals.map(function (o) { return gsap.quickSetter(o, 'x', 'px'); });
     var moveY = ovals.map(function (o) { return gsap.quickSetter(o, 'y', 'px'); });
