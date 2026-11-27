@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.31.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.32.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -246,9 +246,9 @@
      Alleen met muis en zonder reduced motion; anders (en zonder JS) blijft de CSS-slide van de hele tekst. [data-bgf-chars] zet die
      CSS-transform uit (site.css). button.bgfChars = de tekens, ook voor de kleurwissel van Tickets in de nav. */
   /* Testvariant ?buttons=h (BORING 2026-11-27): de knop zoals de link-hover. De tekens schuiven in hun eigen masker naar rechts en een
-     kopie in de hoverkleur (text-shadow één tekenbreedte links) schuift erin; terug bij verlaten. De lijnen vullen horizontaal: elke
-     strook groeit van links naar rechts (scaleX), om de beurt van links, met hetzelfde gevoel als de tekst (0.7 s expo.out). Omgekeerde
-     knop (Tickets): de stroken krimpen naar rechts weg en komen terug. Alleen op de pagina met de parameter. */
+     kopie in de hoverkleur (text-shadow één tekenbreedte links) schuift erin; terug bij verlaten. De achtergrond (de lijnen samen) faadt
+     in (0.4 s; de horizontale stroken waren te heftig, BORING 2026-11-27). Omgekeerde knop (Tickets): de achtergrond faadt weg en terug.
+     Alleen op de pagina met de parameter. */
   var hButtons = /[?&]buttons=h(&|$)/.test(window.location.search);
   if (document.querySelector('.button_background-line, [data-bgf-fill-line]')) withGsap(function (gsap) {
     var desktop = window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 992px)');
@@ -278,16 +278,16 @@
       if (hButtons) gsap.to(chars, { xPercent: y ? 100 : 0, duration: 0.7, ease: 'expo.out', stagger: Math.min(0.03, 0.3 / Math.max(1, chars.length - 1)), overwrite: true });
       else gsap.to(chars, { yPercent: y, duration: 0.5, ease: 'expo.out', stagger: Math.min(0.02, 0.2 / Math.max(1, chars.length - 1)), overwrite: true });
     }
-    // testvariant: stroken naar scaleX v, om de beurt van links (zoals de tekens)
+    // testvariant: de achtergrond (alle lijnen tegelijk) naar dekking v
     function stripsTo(button, lines, v) {
       if (button.bgfLineTw) button.bgfLineTw.kill();
-      button.bgfLineTw = gsap.to(lines, { scaleX: v, duration: 0.7, ease: 'expo.out', stagger: 0.04 });
+      button.bgfLineTw = gsap.to(lines, { opacity: v, duration: 0.4, ease: 'power2.out' });
     }
     hosts.forEach(function (button) {
       var lines = button.querySelectorAll('.button_background-line, [data-bgf-fill-line]');
       if (!lines.length) return;
       var full = parseFloat(window.getComputedStyle(lines[0]).height) > 0;   // lijnen in rust vol = omgekeerde hover
-      if (hButtons) gsap.set(lines, { height: '101%', yPercent: 0, scaleX: full ? 1 : 0, transformOrigin: full ? '100% 50%' : '0% 50%' });
+      if (hButtons) gsap.set(lines, { height: '101%', yPercent: 0, opacity: full ? 1 : 0 });
       else gsap.set(lines, { height: '101%', yPercent: full ? 0 : 101 });
       var text = button.querySelector('.button_text');
       if (text && finePointer.matches && !reduce.matches) document.fonts.ready.then(function () {
