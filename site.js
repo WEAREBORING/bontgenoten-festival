@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.30.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.31.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -245,6 +245,11 @@
      schuift naar zijn kopie (de text-shadow 1em lager, die erft per teken), met een kleine stagger; het masker is de text-wrapper.
      Alleen met muis en zonder reduced motion; anders (en zonder JS) blijft de CSS-slide van de hele tekst. [data-bgf-chars] zet die
      CSS-transform uit (site.css). button.bgfChars = de tekens, ook voor de kleurwissel van Tickets in de nav. */
+  /* Testvariant ?buttons=h (BORING 2026-11-27): de knop zoals de link-hover. De tekens schuiven in hun eigen masker naar rechts en een
+     kopie in de hoverkleur (text-shadow één tekenbreedte links) schuift erin; terug bij verlaten. De lijnen vullen horizontaal: elke
+     strook groeit van links naar rechts (scaleX), om de beurt van links, met hetzelfde gevoel als de tekst (0.7 s expo.out). Omgekeerde
+     knop (Tickets): de stroken krimpen naar rechts weg en komen terug. Alleen op de pagina met de parameter. */
+  var hButtons = /[?&]buttons=h(&|$)/.test(window.location.search);
   if (document.querySelector('.button_background-line, [data-bgf-fill-line]')) withGsap(function (gsap) {
     var desktop = window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 992px)');
     var hosts = [].slice.call(document.querySelectorAll('.button_wrapper'));
@@ -269,30 +274,49 @@
     // tekens naar y (-100 = de kopie in beeld, 0 = rust); de hele golf hoogstens 0.7 s
     function textTo(button, y) {
       var chars = button.bgfChars;
-      if (chars) gsap.to(chars, { yPercent: y, duration: 0.5, ease: 'expo.out', stagger: Math.min(0.02, 0.2 / Math.max(1, chars.length - 1)), overwrite: true });
+      if (!chars) return;
+      if (hButtons) gsap.to(chars, { xPercent: y ? 100 : 0, duration: 0.7, ease: 'expo.out', stagger: Math.min(0.03, 0.3 / Math.max(1, chars.length - 1)), overwrite: true });
+      else gsap.to(chars, { yPercent: y, duration: 0.5, ease: 'expo.out', stagger: Math.min(0.02, 0.2 / Math.max(1, chars.length - 1)), overwrite: true });
+    }
+    // testvariant: stroken naar scaleX v, om de beurt van links (zoals de tekens)
+    function stripsTo(button, lines, v) {
+      if (button.bgfLineTw) button.bgfLineTw.kill();
+      button.bgfLineTw = gsap.to(lines, { scaleX: v, duration: 0.7, ease: 'expo.out', stagger: 0.04 });
     }
     hosts.forEach(function (button) {
       var lines = button.querySelectorAll('.button_background-line, [data-bgf-fill-line]');
       if (!lines.length) return;
       var full = parseFloat(window.getComputedStyle(lines[0]).height) > 0;   // lijnen in rust vol = omgekeerde hover
-      gsap.set(lines, { height: '101%', yPercent: full ? 0 : 101 });
+      if (hButtons) gsap.set(lines, { height: '101%', yPercent: 0, scaleX: full ? 1 : 0, transformOrigin: full ? '100% 50%' : '0% 50%' });
+      else gsap.set(lines, { height: '101%', yPercent: full ? 0 : 101 });
       var text = button.querySelector('.button_text');
       if (text && finePointer.matches && !reduce.matches) document.fonts.ready.then(function () {
-        button.bgfChars = window.SplitText.create(text, { type: 'chars' }).chars;   // SplitText zet aria-label op de tekst, de tekens aria-hidden
+        // SplitText zet aria-label op de tekst, de tekens aria-hidden; de testvariant geeft elk teken een eigen masker
+        button.bgfChars = window.SplitText.create(text, hButtons ? { type: 'chars', mask: 'chars' } : { type: 'chars' }).chars;
         text.setAttribute('data-bgf-chars', '');
+        if (hButtons) {
+          // kopie links van elk teken in de kleur van de CSS-kopie (die staat 1em lager); opnieuw na de kleurwissel van Tickets
+          button.bgfShadow = function () {
+            var m = getComputedStyle(text).textShadow.match(/rgba?\([^)]*\)/);
+            button.bgfChars.forEach(function (c) { c.style.textShadow = (-c.offsetWidth) + 'px 0 0 ' + (m ? m[0] : 'currentColor'); });
+          };
+          button.bgfShadow();
+        }
       });
       var on = false;
       function enter() {
         if (on || !desktop.matches || reduce.matches) return;
         on = true;
         if (button.bgfSwap) button.bgfSwap.progress(1);   // kleurwissel van de nav-knop eerst af
-        if (full) fillOut(button, lines); else fillIn(button, lines);
+        if (hButtons) stripsTo(button, lines, full ? 0 : 1);
+        else if (full) fillOut(button, lines); else fillIn(button, lines);
         textTo(button, -100);
       }
       function leave() {
         if (!on) return;
         on = false;
-        if (full) fillIn(button, lines); else fillOut(button, lines);
+        if (hButtons) stripsTo(button, lines, full ? 1 : 0);
+        else if (full) fillIn(button, lines); else fillOut(button, lines);
         textTo(button, 0);
       }
       button.addEventListener('mouseenter', enter);
@@ -611,13 +635,16 @@
   /* data-bgf-lock (Section - Video): de sectie klikt zacht vast bovenaan het scherm en blijft staan terwijl de volgende sectie
      eroverheen schuift (zoals de "smooth sticky" van extrema.be). Zacht: de curve van de sticky-skill (easePin) laat de sectie over 40%
      schermhoogte afremmen tot stilstand bovenaan (losse translate, de kaart-transform blijft van data-bgf-card); daarna een pin tot de
-     bovenkant van de volgende sectie bovenaan is. Vanaf 768px, zonder reduced motion; het afremmen alleen met muis. */
+     bovenkant van de volgende sectie bovenaan is. Vanaf 768px, zonder reduced motion; het afremmen alleen met muis.
+     Waarde = hoe lang de sectie eerst alleen blijft staan voordat de volgende in beeld komt, in schermhoogtes (standaard 0.5,
+     BORING 2026-11-27); de volgende sectie krijgt die ruimte als margin-top (onder de vastgezette sectie, dus onzichtbaar). */
   if (document.querySelector('[data-bgf-lock]') && !reduce.matches) withGsap(function (gsap) {
     gsap.matchMedia().add('(min-width: 768px)', function () {
       var locks = [].slice.call(document.querySelectorAll('[data-bgf-lock]')).filter(function (el) { return el.nextElementSibling; });
       var eased = [];
       locks.forEach(function (el) {
         var next = el.nextElementSibling;
+        gsap.set(next, { marginTop: num(el, 'data-bgf-lock', 0.5) * 100 + 'vh' });
         // afremmen naar de bovenkant met de curve van de sticky-skill (landing over 40% schermhoogte, begint op scrollsnelheid)
         eased.push(easePin(el, function () { return docTop(el); }, function () { return docTop(next) - docTop(el); }, true));
         window.ScrollTrigger.create({ trigger: el, start: function () { return docTop(el); }, end: function () { return docTop(next); }, pin: true, pinSpacing: false });
@@ -1534,6 +1561,7 @@
       // tekst zoals de hover (BORING 2026-11-27): de tekens schuiven naar een kopie in de nieuwe kleur, in de scrollrichting
       // (naar beneden = kopie van onder, omhoog = kopie van boven); daarna de rust van de nieuwe kleur (CSS), zonder sprong
       var dir = scrollDir, chars = tickets.bgfChars || [ticketText];
+      if (tickets.bgfShadow) chars.forEach(function (c) { c.style.textShadow = ''; });   // testvariant: tijdens de wissel de kopie eronder
       ticketText.style.textShadow = '0 ' + dir + 'em 0 ' + getComputedStyle(ticketText).color;
       ticketText.style.color = oldInk;
       // zoals de hover (BORING 2026-11-27, "on brand"): de lijnen in de nieuwe kleur komen met dezelfde willekeurige stagger in
@@ -1547,6 +1575,7 @@
         g.set(ticketLines, { yPercent: 0 }); g.set(chars, { clearProps: 'transform' });
         getComputedStyle(ticketText).color;   // eerst de nieuwe kleur vastzetten, dan pas de CSS-fade terug (anders faded hij van de oude kleur: zwart op zwart)
         ticketText.style.transition = '';
+        if (tickets.bgfShadow) tickets.bgfShadow();
         swapTl = tickets.bgfSwap = null; } })
         .to(ticketLines, { yPercent: 0, duration: 0.4, ease: 'expo.out', stagger: { amount: 0.15, from: 'random' } }, 0)
         .to(chars, { yPercent: -100 * dir, duration: 0.5, ease: 'expo.out', stagger: Math.min(0.02, 0.2 / Math.max(1, chars.length - 1)) }, 0);
