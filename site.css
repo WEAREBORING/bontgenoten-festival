@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.css v1.26.2: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
+/* Bontgenoten Festival site.css v1.26.3: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
 
 /* Vloeiende root-fontgrootte: 1rem = 16px op het ontwerpformaat (1440 x 900) en daaronder. Groter alleen als het scherm
    zowel breder als hoger is, tot 18px; zo past een sectie ook op een breed maar laag scherm.
@@ -131,7 +131,10 @@ html.bgf-cursor-on .video_hint { display: none; }
 /* data-bgf-lineup, cilinder (site.js zet data-bgf-lineup-ready en --k). Maten in baan-px van het Figma-frame (1440 x 680, kaart
    480 x 600, midden op 720 / 300), de hele baan schaalt met --k. De slider loopt van rand tot rand (buiten de container). */
 [data-bgf-lineup-ready] { overflow-x: clip; }
-[data-bgf-lineup-ready] .lineup_slider { position: relative; width: 100vw; max-width: none; margin: 4rem calc(50% - 50vw) 2rem; height: calc(680px * var(--k, 1)); }
+/* hoogte: kaart 600 + het naamblok dat eronder uitsteekt (top 556); sinds het genre in de navigatiebalk staat is het blok korter, dus 640 en geen marge onder (BORING 2026-11-27: minder ruimte tot de balk) */
+[data-bgf-lineup-ready] .lineup_slider { position: relative; width: 100vw; max-width: none; margin: 4rem calc(50% - 50vw) 0; height: calc(640px * var(--k, 1)); }
+/* telefoons: het naamblok is daar naar verhouding groter (de baan schaalt kleiner, de tekst niet), dus de oude ruimte */
+@media (max-width: 767px) { [data-bgf-lineup-ready] .lineup_slider { margin-bottom: 2rem; height: calc(680px * var(--k, 1)); } }
 [data-bgf-lineup-ready] .lineup_list { position: absolute; left: 50%; top: 0; width: 1440px; height: 680px; margin-left: -720px; padding: 0; display: block;
   overflow: visible; scroll-snap-type: none; transform: scale(var(--k, 1)); transform-origin: 50% 0; perspective: 2400px; perspective-origin: 720px 300px;
   cursor: grab; user-select: none; -webkit-user-select: none; touch-action: pan-y; }
