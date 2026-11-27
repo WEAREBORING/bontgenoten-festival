@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.24.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.25.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -922,10 +922,12 @@
         buttons.forEach(function (b, i) {
           var chars = b.bgfChars, ink = getComputedStyle(b).color;
           if (!chars) return;
-          gsap.killTweensOf(chars);
+          // de vorige wissel van deze dag stoppen via zijn eigen tween: killTweensOf(chars) liet de omhullende timeline (met de stagger en
+          // onComplete) leven, die dan midden in de nieuwe wissel de kopie wiste, zodat de dag onzichtbaar werd (BORING 2026-11-27, snel klikken)
+          if (b.bgfInk) b.bgfInk.kill();
           chars.forEach(function (c) { c.style.color = olds[i]; c.style.textShadow = (-dir * c.offsetWidth) + 'px 0 0 ' + ink; });
-          gsap.fromTo(chars, { xPercent: 0 }, { xPercent: 100 * dir, duration: 0.7, ease: 'expo.out', stagger: Math.min(0.03, 0.3 / Math.max(1, chars.length - 1)),
-            onComplete: function () { chars.forEach(function (c) { c.style.color = c.style.textShadow = ''; }); gsap.set(chars, { xPercent: 0 }); } });
+          b.bgfInk = gsap.fromTo(chars, { xPercent: 0 }, { xPercent: 100 * dir, duration: 0.7, ease: 'expo.out', stagger: Math.min(0.03, 0.3 / Math.max(1, chars.length - 1)),
+            onComplete: function () { b.bgfInk = null; chars.forEach(function (c) { c.style.color = c.style.textShadow = ''; }); gsap.set(chars, { xPercent: 0 }); } });
         });
       }
       days.forEach(function (button) {
