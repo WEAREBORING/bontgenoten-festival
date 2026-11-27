@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.js v1.19.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
+/* Bontgenoten Festival site.js v1.20.0: attribuutmodules. Bron: site.js in WEAREBORING/bontgenoten-festival. Elke module start alleen als zijn attribuut of class op de pagina staat. */
 (function () {
   'use strict';
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -193,6 +193,11 @@
       }
       button.addEventListener('mouseenter', enter);
       button.addEventListener('mouseleave', leave);
+      // een tab die niet meer actief is (data-bgf-tabs) gaat eruit als een hover-uit: de lijnen staan vol en schuiven omhoog weg
+      button.addEventListener('bgf:deselect', function () {
+        if (!desktop.matches || reduce.matches || full) return;
+        on = false; gsap.set(lines, { yPercent: 0 }); fillOut(lines);
+      });
       // naar tablet of touch terwijl de muis erop staat: terug naar rust
       desktop.addEventListener('change', leave);
     });
@@ -942,31 +947,18 @@
       .to('.loader_logo-icon', { yPercent: -110, ease: 'expo.out', duration: 0.6 }, 0.2);
   }, homeLoader ? ['CustomEase'] : []);
 
-  /* data-bgf-curve (Section - Marquee): de band hangt als slinger door (BORING 2026-11-26, naar de marquee onder de hero van
-     two26.studio). De sectie wordt geknipt tot een dikke gebogen band (clip-path: path(), opnieuw bij resize), de tekst loopt over
+  /* data-bgf-curve (Section - Marquee): de band loopt als S-bocht (BORING 2026-11-27; eerst een slinger naar de marquee onder de hero
+     van two26.studio). De sectie wordt geknipt tot een dikke gebogen band (clip-path: path(), opnieuw bij resize), de tekst loopt over
      dezelfde lijn in een SVG-textPath. De gewone rij (data-bgf-marquee) blijft voor schermlezers (.bgf-sr) en levert tekst, lettertype
      en tussenruimte. data-bgf-marquee laat de tekst lopen met section.bgfCurve.offset(pos); bij reduced motion staat hij stil. */
-  /* TIJDELIJK (BORING 2026-11-27, weghalen na de keuze): vormen van de band om uit te kiezen op staging met ?marquee=swag|arc|double|s|wave|tilt.
-     Elke vorm is y(u) over de breedte (u 0..1, de lijn loopt 6% buiten beeld door), geschaald met A; de band volgt de lijn. */
-  var CURVE_FN = {
-    swag: function (u) { return Math.sin(Math.PI * u); },                     // één slinger die doorhangt (v1.16.0)
-    arc: function (u) { return -Math.sin(Math.PI * u); },                      // boog omhoog (two26)
-    double: function (u) { return (1 - Math.cos(4 * Math.PI * u)) / 2; },      // twee slingers
-    s: function (u) { return Math.sin(2 * Math.PI * u) / 2; },                 // S-bocht
-    wave: function (u) { return Math.sin(3 * Math.PI * u) / 4; },              // zachte golf
-    tilt: function (u) { return (u - 0.5) / 2; }                               // rechte schuine band
-  };
-  var curveShape = (window.location.search.match(/[?&]marquee=(\w+)/) || [])[1];
-  if (!CURVE_FN[curveShape]) curveShape = 'swag';
-  var CURVES = {};
-  Object.keys(CURVE_FN).forEach(function (name) {
-    CURVES[name] = function (W, T) {
-      var A = Math.max(T * 0.7, W * 0.08), pts = [], min = Infinity, max = -Infinity;
-      for (var i = 0; i <= 96; i++) { var u = i / 96, y = A * CURVE_FN[name](u); pts.push([-0.06 * W + 1.12 * W * u, y]); min = Math.min(min, y); max = Math.max(max, y); }
-      var top = T * 0.62 - min;
-      return { H: max - min + T * 1.24, d: 'M' + pts.map(function (p) { return p[0].toFixed(1) + ',' + (p[1] + top).toFixed(1); }).join(' L') };
-    };
-  });
+  /* Vorm: S-bocht (BORING koos hem 2026-11-27 uit zes vormen op staging). y(u) over de breedte (u 0..1, de lijn loopt 6% buiten beeld
+     door), geschaald met A; de band volgt de lijn. */
+  function curveShape(W, T) {
+    var A = Math.max(T * 0.7, W * 0.08), pts = [], min = Infinity, max = -Infinity;
+    for (var i = 0; i <= 96; i++) { var u = i / 96, y = A * Math.sin(2 * Math.PI * u) / 2; pts.push([-0.06 * W + 1.12 * W * u, y]); min = Math.min(min, y); max = Math.max(max, y); }
+    var top = T * 0.62 - min;
+    return { H: max - min + T * 1.24, d: 'M' + pts.map(function (p) { return p[0].toFixed(1) + ',' + (p[1] + top).toFixed(1); }).join(' L') };
+  }
   each('[data-bgf-curve]', function (section) {
     var track = section.querySelector('[data-bgf-marquee]');
     var group = track && track.querySelector('[data-bgf-marquee-item]');
@@ -1000,7 +992,7 @@
       text.setAttribute('fill', cs.color);
       var fs = parseFloat(cs.fontSize), W = section.clientWidth;
       var T = fs * 2.9;                         // dikte van de band (zoals de rechte band: 120px bij 41px tekst)
-      var shape = CURVES[curveShape](W, T);
+      var shape = curveShape(W, T);
       section.style.height = shape.H + 'px';
       path.setAttribute('d', shape.d);
       // band = de lijn met dikte T: punten links en rechts van de lijn (loodrecht), heen langs de bovenrand en terug langs de onderrand
@@ -1142,6 +1134,17 @@
       return r.length ? r : [panel];
     };
     var select = function (tab, focus) {
+      var was = tabs.filter(function (t) { return t.getAttribute('aria-selected') === 'true'; })[0];
+      // de vorige tab springt niet terug maar gaat eruit als een hover-uit (lijnen: button-module; tekst: hier, van zijn creme kopie terug)
+      if (was && was !== tab) {
+        var text = was.querySelector('.faq_tab-text');
+        if (text && window.gsap && !reduce.matches && window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 992px)').matches) {
+          text.style.transition = 'none';
+          window.gsap.fromTo(text, { yPercent: -100 }, { yPercent: 0, duration: 0.3, ease: 'power3.inOut',
+            onComplete: function () { window.gsap.set(text, { clearProps: 'transform' }); text.style.transition = ''; } });
+        }
+        was.dispatchEvent(new CustomEvent('bgf:deselect'));
+      }
       tabs.forEach(function (t) {
         var on = t === tab;
         t.setAttribute('aria-selected', on);
@@ -1401,39 +1404,36 @@
     document.addEventListener('click', function (e) { if (!nav.contains(e.target)) { closeDrops(); setMenu(false); } });
   });
 
-  /* TIJDELIJK (BORING 2026-11-27, weghalen of vastzetten na de keuze): link-hover om uit te kiezen op staging met ?links=1|2|3.
-     Elk teken (of woord) schuift binnen zijn masker naar rechts en zijn kopie (text-shadow, zelfde kleur, één tekenbreedte links)
-     schuift erin; bij verlaten schuiven ze terug naar links. 1 = tekens, kort na elkaar; 2 = tekens, langzamere golf; 3 = per woord.
-     Alleen met muis en zonder reduced motion. */
-  var linkMode = (window.location.search.match(/[?&]links=([123])/) || [])[1];
-  if (linkMode && finePointer.matches && !reduce.matches) withGsap(function (gsap) {
-    var cfg = { 1: { type: 'chars', duration: 0.45, stagger: 0.012, ease: 'power3.inOut' },
-      2: { type: 'chars', duration: 0.7, stagger: 0.03, ease: 'expo.out' },
-      3: { type: 'words', duration: 0.45, stagger: 0, ease: 'power3.inOut' } }[linkMode];
+  /* Link-hover (BORING koos 2026-11-27 versie 2 van drie): elk teken schuift binnen zijn masker naar rechts en zijn kopie (text-shadow,
+     zelfde kleur, één tekenbreedte links) schuift erin, als een langzame golf; bij verlaten terug naar links. Alleen echte links (a[href])
+     in de nav en de footer, niet de gewone teksten van de footer. De golf duurt hoogstens 1 s: bij lange links worden de tekens dichter
+     op elkaar gezet. Alleen met muis en zonder reduced motion. */
+  if (finePointer.matches && !reduce.matches && document.querySelector('a.nav_link[href], a.footer_detail[href], a.footer_legal-link[href]')) withGsap(function (gsap) {
+    var DUR = 0.7, MAX = 1;
     document.fonts.ready.then(function () {
-      each('.nav_link, .footer_detail, .footer_legal-link', function (link) {
-        var parts = window.SplitText.create(link, { type: cfg.type, mask: cfg.type })[cfg.type];
-        parts.forEach(function (p) { p.style.textShadow = (-p.offsetWidth) + 'px 0 0 currentColor'; });
-        link.addEventListener('mouseenter', function () { gsap.to(parts, { xPercent: 100, duration: cfg.duration, ease: cfg.ease, stagger: cfg.stagger, overwrite: true }); });
-        link.addEventListener('mouseleave', function () { gsap.to(parts, { xPercent: 0, duration: cfg.duration, ease: cfg.ease, stagger: cfg.stagger, overwrite: true }); });
+      each('a.nav_link[href], a.footer_detail[href], a.footer_legal-link[href]', function (link) {
+        var chars = window.SplitText.create(link, { type: 'chars', mask: 'chars' }).chars;
+        chars.forEach(function (c) { c.style.textShadow = (-c.offsetWidth) + 'px 0 0 currentColor'; });
+        var stagger = Math.min(0.03, (MAX - DUR) / Math.max(1, chars.length - 1));
+        var go = function (x) { gsap.to(chars, { xPercent: x, duration: DUR, ease: 'expo.out', stagger: stagger, overwrite: true }); };
+        link.addEventListener('mouseenter', function () { go(100); });
+        link.addEventListener('mouseleave', function () { go(0); });
       });
     });
   }, ['SplitText']);
 
-  /* TIJDELIJK (BORING 2026-11-27): Section - About gecentreerd (Figma "section_about centered" 646:1933) als testversie op staging met
-     ?about=centered: tekst in het midden, de twee beelden scheef links en rechts, als video's van de huidige site (Vidzflow-mp4's van
-     /bontgenoten). Parallax blijft (data-bgf-speed op de beelden). De opmaak staat in site.css onder [data-bgf-about-test]. */
-  if (/[?&]about=centered/.test(window.location.search)) each('.about_section', function (section) {
-    section.setAttribute('data-bgf-about-test', '');
-    var SRC = ['https://r2.vidzflow.com/v/PYQTZswaTA_576p_1736264499.mp4', 'https://r2.vidzflow.com/v/2KfFM2nBiy_576p_1766503667.mp4'];
-    [].forEach.call(section.querySelectorAll('.about_photo-image'), function (img, i) {
-      var v = document.createElement('video');
-      v.className = 'about_photo-image';
-      v.src = SRC[i % 2]; v.poster = img.currentSrc || img.src;
-      v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = !reduce.matches;
-      v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
-      img.replaceWith(v);
-    });
+  /* data-bgf-video="mp4-url" op een afbeelding (Section - About): de afbeelding wordt een stille, herhalende video met de afbeelding als
+     poster; hij speelt alleen in beeld. Reduced motion: de afbeelding blijft. */
+  if (!reduce.matches) each('img[data-bgf-video]', function (img) {
+    var v = document.createElement('video');
+    v.className = img.className;
+    v.src = img.getAttribute('data-bgf-video'); v.poster = img.currentSrc || img.src;
+    v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'metadata';
+    v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
+    img.replaceWith(v);
+    new IntersectionObserver(function (entries) {
+      if (entries[0].isIntersecting) v.play().catch(function () {}); else v.pause();
+    }).observe(v);
   });
 
   /* data-bgf-hover: hover-animatie met GSAP, alleen op desktop met muis.
