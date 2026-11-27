@@ -1,4 +1,4 @@
-/* Bontgenoten Festival site.css v1.26.0: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
+/* Bontgenoten Festival site.css v1.26.1: alleen wat Webflow niet zelf kan. Bron: site.css in WEAREBORING/bontgenoten-festival. */
 
 /* Vloeiende root-fontgrootte: 1rem = 16px op het ontwerpformaat (1440 x 900) en daaronder. Groter alleen als het scherm
    zowel breder als hoger is, tot 18px; zo past een sectie ook op een breed maar laag scherm.
@@ -62,6 +62,51 @@ html.bgf-nav-open { overflow: hidden; }
 .faq_tab[aria-selected="true"] { background-color: var(--_theme---action--primary); color: var(--_theme---action--contrast); }
 [data-bgf-day-pill] .faq_tab[aria-selected="true"] { background-color: transparent; }
 .faq_tabs .bgf-day-pill { background-color: var(--_theme---action--primary); }
+
+/* data-bgf-accordion (Item - FAQ): klapt in met grid-rows zodra site.js klaar is (data-bgf-ready; animatie pas na de eerste paint, data-bgf-animate); dicht = onzichtbaar voor
+   toetsenbord en schermlezer. Het plusje wordt een min doordat de verticale streep wegschaalt. */
+[data-bgf-ready] [data-bgf-accordion-panel] { grid-template-rows: 0fr; }
+[data-bgf-animate] [data-bgf-accordion-panel] { transition: grid-template-rows 0.55s cubic-bezier(0.65, 0, 0.35, 1); }
+[data-bgf-ready] [aria-expanded="true"] + [data-bgf-accordion-panel] { grid-template-rows: 1fr; }
+[data-bgf-ready] [data-bgf-accordion-panel][aria-hidden="true"] > * { visibility: hidden; }
+[data-bgf-animate] [data-bgf-accordion-panel][aria-hidden="true"] > * { transition: visibility 0s 0.55s; }
+[data-bgf-accordion-icon-v] { transform-box: fill-box; transform-origin: center; transition: transform 0.45s cubic-bezier(0.65, 0, 0.35, 1); }
+[aria-expanded="true"] [data-bgf-accordion-icon-v] { transform: scaleY(0); }
+@media (prefers-reduced-motion: reduce) { [data-bgf-accordion-panel], [data-bgf-accordion-panel] > *, [data-bgf-accordion-icon-v] { transition: none !important; } }
+/* Huisregel (antwoord = vraag, site.js zet data-bgf-statement): geen plusje, geen klikbare knop */
+[data-bgf-statement] .faq_icon { display: none; }
+[data-bgf-statement] .faq_question:disabled { cursor: default; color: inherit; opacity: 1; }
+/* Antwoorden uit het CMS: links in de tekstkleur, onderstreept (Webflow kan geen nested selector via de API) */
+.faq_answer-text a { color: inherit; text-decoration: underline; }
+
+/* data-bgf-hero: de zijteksten scrollen mee weg met de inhoud (site.js zet --bgf-hero-out op de hero); losse translate, want de
+   transform van de class zet ze in het midden en draait ze */
+[data-bgf-hero-fade] { translate: 0 var(--bgf-hero-out, 0px); }
+
+/* data-bgf-gradient (hero, footer-CTA, marquee): de live canvas ligt over de still en faded in zodra het eerste beeld er is */
+.bgf-gradient { position: absolute; top: 0; left: 0; z-index: -2; width: 100%; height: 100%; opacity: 0; transition: opacity 1.2s ease; pointer-events: none; }
+.bgf-gradient[data-bgf-ready] { opacity: 1; }
+.bgf-gradient[data-bgf-crop] { top: 50%; height: auto; aspect-ratio: 16 / 9; transform: translateY(-50%); }
+/* data-bgf-gradient-text (galerijtitel): de canvas vult de regel (geknipt tot de letters); de eigen vulling verdwijnt zodra hij tekent */
+[data-bgf-gradient-text] > .bgf-gradient { z-index: 0; }
+[data-bgf-gradient-text][data-bgf-live] { background-image: none !important; -webkit-text-fill-color: transparent; }
+[data-bgf-baseline] { display: inline-block; width: 0; height: 0; vertical-align: baseline; }
+
+/* data-bgf-card (site.js): de zwarte laag over de hero (.bgf-dim) kleurt mee met de eerste kaart; naast de kaarten is de pagina creme */
+/* Meer ruimte boven een kaart zolang hij scheef binnenkomt (BORING 2026-11-26); zonder die animatie (telefoon, reduced motion) blijft de
+   overlap van -2.5rem uit Webflow */
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  [data-bgf-card] { margin-top: var(--_typography---space--section-y); }
+}
+.bgf-dim { position: absolute; inset: 0; z-index: 5; background-color: var(--_theme---surface--dark); opacity: 0; pointer-events: none; }
+
+/* data-bgf-collage (Section - Gallery): het slot zet de foto's in een <div> zonder class; die doet niet mee aan de opmaak van de lijst */
+[data-bgf-collage] > div:not([class]) { display: contents; }
+/* de titel is sticky; overflow: hidden op .main-wrapper (Webflow) maakt daar een scrollcontainer van, clip knipt hetzelfde zonder dat */
+.main-wrapper:has([data-bgf-collage]) { overflow: clip; }
+
+/* data-bgf-curve (Section - Marquee): de SVG met de tekst op de gebogen lijn ligt boven het verloop; site.js knipt de sectie tot de band */
+.bgf-curve { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 
 /* Alleen voor schermlezers (site.js maakt zulke teksten, zoals de aankondiging van de line-up) */
 .bgf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
